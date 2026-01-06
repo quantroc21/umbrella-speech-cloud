@@ -43,8 +43,11 @@ dependencies = [
     "tiktoken>=0.8.0",
     "pydantic==2.9.2",
     "cachetools",
+    "cachetools",
     "descript-audio-codec",
-    "descript-audiotools"
+    "descript-audiotools",
+    "huggingface_hub",
+    "runpod"
 ]
 
 [project.optional-dependencies]
