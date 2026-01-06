@@ -17,15 +17,14 @@ RUN apt-get update && apt-get install -y \
 COPY pyproject.toml .
 # (If you had a requirements.txt, copy it here)
 
-# Install Python dependencies
-# We install 'runpod' specifically for the handler
-RUN pip install --no-cache-dir runpod
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Copy the rest of the application
 COPY . .
 
-# Install the package in editable mode
-RUN pip install -e .
+# Install dependencies using uv
+RUN uv pip install --system -e .
 
 # --- CRITICAL: Download Models at Build Time ---
 # This ensures the models are inside the image, so "Cold Start" doesn't have to download them.
