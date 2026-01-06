@@ -9,8 +9,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install system dependencies (ffmpeg is required for audio)
 RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
     ffmpeg \
     git \
+    libsndfile1 \
+    portaudio19-dev \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements or setup.py first to cache dependencies
