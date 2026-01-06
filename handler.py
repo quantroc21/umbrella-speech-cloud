@@ -22,6 +22,7 @@ try:
     import base64
     import io
     import torch
+    import numpy as np
     import runpod
     
     print("--- [DEBUG] Importing Fish Speech Engines... ---", file=sys.stderr, flush=True)
