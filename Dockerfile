@@ -1,5 +1,5 @@
-# Base Image with PyTorch and CUDA
-FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+# Base Image with Newer PyTorch for compatibility
+FROM pytorch/pytorch:2.4.1-cuda12.4-cudnn9-runtime
 
 # Set working directory
 WORKDIR /app
