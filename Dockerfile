@@ -33,8 +33,8 @@ RUN uv pip install --system -e .
 
 # --- CRITICAL: Download Models at Build Time ---
 # This ensures the models are inside the image, so "Cold Start" doesn't have to download them.
-# We call the existing script to fetch them.
-RUN python tools/download_models.py
+# We call the NEW linux-specific script to fetch them (skipping windows .exes).
+RUN python tools/docker_download.py
 
 # Define the entrypoint
 # -u means unbuffered output (so you see logs immediately)
