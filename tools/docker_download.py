@@ -13,6 +13,7 @@ def check_and_download_files(repo_id, file_list, local_dir):
                 resume_download=True,
                 local_dir=local_dir,
                 local_dir_use_symlinks=False,
+                token=os.environ.get("HF_TOKEN"),
             )
         else:
             print(f"{file} exists, skipping.")

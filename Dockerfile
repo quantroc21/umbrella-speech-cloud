@@ -34,6 +34,8 @@ RUN uv pip install --system -e .
 # --- CRITICAL: Download Models at Build Time ---
 # This ensures the models are inside the image, so "Cold Start" doesn't have to download them.
 # We call the NEW linux-specific script to fetch them (skipping windows .exes).
+ARG HF_TOKEN
+ENV HF_TOKEN=${HF_TOKEN}
 RUN python tools/docker_download.py
 
 # Define the entrypoint

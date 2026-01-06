@@ -111,3 +111,8 @@ ffprobe.exe
 # ----------
 /*.test.sh
 asr-label*
+*.zip
+*.exe
+eloquent-voice-studio-main/
+ngrok*
+project_src.zip
