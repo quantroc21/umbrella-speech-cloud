@@ -72,15 +72,33 @@ try:
                 temperature=job_input.get("temperature", 0.7),
             )
 
+            import soundfile as sf
             audio_buffer = io.BytesIO()
             from tools.server.inference import inference_wrapper
             
+            # The inference_wrapper yields chunks. 
+            # In non-streaming mode, it yields one 'final' chunk as a numpy array.
+            # In streaming mode, it yields segments as bytes.
+            audio_data = []
+            sample_rate = engine.decoder_model.sample_rate
+
             for chunk in inference_wrapper(req, engine):
                 if isinstance(chunk, bytes):
                     audio_buffer.write(chunk)
+                elif isinstance(chunk, np.ndarray):
+                    audio_data.append(chunk)
+            
+            # If we collected numpy arrays, write them as a WAV file
+            if audio_data:
+                full_audio = np.concatenate(audio_data) if len(audio_data) > 1 else audio_data[0]
+                sf.write(audio_buffer, full_audio, sample_rate, format='WAV')
                     
             audio_buffer.seek(0)
-            audio_base64 = base64.b64encode(audio_buffer.read()).decode("utf-8")
+            data = audio_buffer.read()
+            if not data:
+                return {"error": "No audio data generated", "status": "failed"}
+
+            audio_base64 = base64.b64encode(data).decode("utf-8")
             
             return {
                 "audio_base64": audio_base64,
