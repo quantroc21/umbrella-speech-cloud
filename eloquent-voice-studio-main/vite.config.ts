@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => ({
         rewrite: (path) => path.replace(/^\/api\/serverless/, '')
       },
       "/v1": {
-        target: "http://127.0.0.1:8000",
+        target: "https://api.runpod.ai/v2/vliov4h1a58iwu/runsync",
         changeOrigin: true,
       },
     }

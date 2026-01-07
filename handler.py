@@ -41,7 +41,7 @@ try:
         mode="tts",
         device=DEVICE,
         half=True if DEVICE == "cuda" else False,           
-        compile=False,       
+        compile=True,       
         llama_checkpoint_path=LLAMA_CHECKPOINT_PATH,
         decoder_checkpoint_path=DECODER_CHECKPOINT_PATH,
         decoder_config_name=DECODER_CONFIG_NAME
@@ -119,7 +119,7 @@ try:
             return {
                 "audio_base64": audio_base64,
                 "format": "wav",
-                "status": "success"
+                "status": "COMPLETED"
             }
         except Exception as e:
             print(f"--- [ERROR] Inference failed: {str(e)} ---", file=sys.stderr, flush=True)
