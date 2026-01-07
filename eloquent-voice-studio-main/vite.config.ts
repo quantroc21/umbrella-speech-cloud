@@ -14,6 +14,8 @@ export default defineConfig(({ mode }) => ({
       '/api/serverless': {
         target: 'https://api.runpod.ai/v2/vliov4h1a58iwu/runsync',
         changeOrigin: true,
+        timeout: 600000,
+        proxyTimeout: 600000,
         rewrite: (path) => path.replace(/^\/api\/serverless/, '')
       },
       "/v1": {
