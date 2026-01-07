@@ -47,7 +47,8 @@ dependencies = [
     "descript-audio-codec",
     "descript-audiotools",
     "huggingface_hub",
-    "runpod"
+    "runpod",
+    "soundfile"
 ]
 
 [project.optional-dependencies]

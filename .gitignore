@@ -65,7 +65,9 @@ venv.bak/
 data/
 results/
 checkpoints/
-references/
+# references/
+# *.wav
+# *.lab
 demo-audios/
 example/
 filelists/
@@ -73,11 +75,11 @@ filelists/
 
 # Audio Files
 # -----------
-*.wav
-*.mp3
-*.flac
-*.ogg
-*.m4a
+# *.wav
+# *.mp3
+# *.flac
+# *.ogg
+# *.m4a
 
 # Data Files
 # ----------
@@ -85,7 +87,7 @@ filelists/
 *.npz
 *.pkl
 *.pickle
-*.lab
+# *.lab
 /fish_speech/text/cmudict_cache.pickle
 
 # Cache and Temporary Files
@@ -113,6 +115,5 @@ ffprobe.exe
 asr-label*
 *.zip
 *.exe
-eloquent-voice-studio-main/
 ngrok*
 project_src.zip
