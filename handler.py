@@ -27,7 +27,7 @@ try:
     
     print("--- [DEBUG] Importing Fish Speech Engines... ---", file=sys.stderr, flush=True)
     from tools.server.model_manager import ModelManager
-    from fish_speech.utils.schema import ServeTTSRequest
+    from fish_speech.utils.schema import ServeTTSRequest, ServeReferenceAudio
 
     # --- Configuration ---
     LLAMA_CHECKPOINT_PATH = checkpoint_dir
@@ -62,15 +62,30 @@ try:
             if not text:
                 return {"error": "No text provided"}
 
+            # Prepare references
+            references = []
+            for ref in job_input.get("references", []):
+                references.append(ServeReferenceAudio(
+                    audio=ref.get("audio"),
+                    text=ref.get("text")
+                ))
+
             req = ServeTTSRequest(
                 text=text,
-                reference_id=job_input.get("reference_id"),
                 chunk_length=job_input.get("chunk_length", 200),
-                format="wav",
-                max_new_tokens=job_input.get("max_new_tokens", 0), 
+                format=job_input.get("format", "wav"),
+                references=references,
+                reference_id=job_input.get("reference_id"),
+                seed=job_input.get("seed"),
+                use_memory_cache=job_input.get("use_memory_cache", "off"),
+                normalize=job_input.get("normalize", True),
+                streaming=job_input.get("streaming", False),
+                max_new_tokens=job_input.get("max_new_tokens", 1024),
                 top_p=job_input.get("top_p", 0.7),
                 repetition_penalty=job_input.get("repetition_penalty", 1.2),
                 temperature=job_input.get("temperature", 0.7),
+                pause_amount=job_input.get("pause_amount", 0.0),
+                speed=job_input.get("speed", 1.0),
             )
 
             import soundfile as sf
@@ -112,8 +127,9 @@ try:
             return {"error": str(e), "status": "failed"}
 
     # Start the worker
-    print("--- [DEBUG] RunPod Worker Starting... ---", file=sys.stderr, flush=True)
-    runpod.serverless.start({"handler": handler})
+    if __name__ == "__main__":
+        print("--- [DEBUG] RunPod Worker Starting... ---", file=sys.stderr, flush=True)
+        runpod.serverless.start({"handler": handler})
 
 except Exception as e:
     print("\n" + "="*50, file=sys.stderr, flush=True)
