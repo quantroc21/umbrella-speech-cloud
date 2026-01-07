@@ -10,13 +10,34 @@ print("--- [DEBUG] Starting handler script (V2-Safe)... ---", file=sys.stderr, f
 
 try:
     print("--- [DEBUG] Checking Checkpoints... ---", file=sys.stderr, flush=True)
-    checkpoint_dir = "checkpoints/openaudio-s1-mini"
+    
+    # v8 Module 2: Network Volume Optimization
+    # Prioritize Network Volume if available
+    NETWORK_VOLUME_PATH = "/runpod-volume/checkpoints/openaudio-s1-mini"
+    LOCAL_CHECKPOINT_PATH = "checkpoints/openaudio-s1-mini"
+    
+    if os.path.exists(NETWORK_VOLUME_PATH):
+        checkpoint_dir = NETWORK_VOLUME_PATH
+        print(f"--- [v8 OPTIMIZATION] Using Network Volume: {checkpoint_dir} ---", file=sys.stderr, flush=True)
+    else:
+        checkpoint_dir = LOCAL_CHECKPOINT_PATH
+        print(f"--- [v8 INFO] Using Local Checkpoints: {checkpoint_dir} ---", file=sys.stderr, flush=True)
+
     if not os.path.exists(checkpoint_dir):
         print(f"--- [CRITICAL] Checkpoint dir {checkpoint_dir} MISSING! ---", file=sys.stderr, flush=True)
-        # List current dir to debug
         print(f"--- [DEBUG] Files in /app: {os.listdir('.')} ---", file=sys.stderr, flush=True)
     else:
-        print(f"--- [DEBUG] Checkpoints found: {os.listdir(checkpoint_dir)} ---", file=sys.stderr, flush=True)
+        # v8 Module 2: Pre-warming
+        # specific file touching to trigger page cache impact from network volume
+        print(f"--- [v8 PRE-WARM] Touching model files in {checkpoint_dir}... ---", file=sys.stderr, flush=True)
+        try:
+            for fname in os.listdir(checkpoint_dir):
+                fpath = os.path.join(checkpoint_dir, fname)
+                if os.path.isfile(fpath):
+                    with open(fpath, 'rb') as f:
+                        f.read(1024) # Read first 1KB to trigger OS cache
+        except Exception as e:
+            print(f"--- [v8 WARNING] Pre-warm failed: {e} ---", file=sys.stderr, flush=True)
 
     print("--- [DEBUG] Importing Core Libraries... ---", file=sys.stderr, flush=True)
     import base64
@@ -61,6 +82,18 @@ try:
             text = job_input.get("text")
             if not text:
                 return {"error": "No text provided"}
+
+            # v8 Module 3: 1200 Character Threshold
+            if len(text) < 1200:
+                print(f"--- [v8 GUARD] Request rejected. Length: {len(text)} < 1200 ---", file=sys.stderr, flush=True)
+                return {
+                    "error": f"Input must be at least 1200 characters. (Current: {len(text)})",
+                    "status": "failed"
+                }
+
+            # v8 Module 1: Voice-Lock Protocol Logging
+            voice_id = job_input.get("reference_id")
+            print(f"--- [v8 VOICE-LOCK] Target Voice ID: {voice_id} ---", file=sys.stderr, flush=True)
 
             # Prepare references
             references = []

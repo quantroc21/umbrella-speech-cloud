@@ -12,6 +12,9 @@ import { AddVoiceDialog } from "@/components/AddVoiceDialog";
 
 const API_BASE = window.location.origin;
 
+// v8 Module 3: Threshold Constant
+const MIN_CHAR_THRESHOLD = 1200;
+
 const Index = () => {
   const PRESET_VOICES = [
     { id: "Donal Trump", name: "Donald Trump", description: "Preset Voice" },
@@ -86,6 +89,16 @@ const Index = () => {
       return;
     }
 
+    // v8 Module 3: 1200 Character Threshold Guard
+    if (text.length < MIN_CHAR_THRESHOLD) {
+      toast({
+        title: "Text Too Short",
+        description: `Production requirement: Minimum ${MIN_CHAR_THRESHOLD} characters. (Current: ${text.length})`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsGenerating(true);
 
     try {
@@ -94,7 +107,7 @@ const Index = () => {
 
       // Serverless (RunPod) Request Structure - REMOVED KEY FOR GITHUB PUSH PROTECTION
       // TODO: Move this to a secure .env file or User Settings UI
-      const key = "";
+      const key = ""; // REMOVED_FOR_PUSH
 
       const response = await fetch(`${API_BASE}/api/serverless`, {
         method: 'POST',
@@ -206,11 +219,18 @@ const Index = () => {
             />
           </section>
 
-          {/* Generate Button */}
+          {/* v8 Module 3: Character Counter */}
+          <div className="flex justify-between items-center text-xs text-muted-foreground pb-1">
+            <span>{Math.max(0, MIN_CHAR_THRESHOLD - text.length)} characters remaining to unlock</span>
+            <span className={text.length < MIN_CHAR_THRESHOLD ? "text-destructive font-bold" : "text-green-500 font-bold"}>
+              {text.length} / {MIN_CHAR_THRESHOLD}
+            </span>
+          </div>
+
           <Button
             onClick={handleGenerate}
-            disabled={isGenerating || !text.trim()}
-            className="w-full h-14 text-lg font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg glow-primary transition-all"
+            disabled={isGenerating || text.length < MIN_CHAR_THRESHOLD}
+            className="w-full h-14 text-lg font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg glow-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isGenerating ? (
               <>
