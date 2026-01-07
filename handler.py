@@ -97,6 +97,34 @@ try:
 
             # Prepare references
             references = []
+            
+            # v8.1 FIX: Load Preset from Disk if ID matches
+            if voice_id:
+                preset_path = os.path.join("/app/references", voice_id)
+                if os.path.exists(preset_path) and os.path.isdir(preset_path):
+                    print(f"--- [v8 VOICE-LOCK] Found Preset Folder: {preset_path} ---", file=sys.stderr, flush=True)
+                    # Find first audio file
+                    audio_file = None
+                    for f in os.listdir(preset_path):
+                        if f.endswith(('.wav', '.mp3', '.flac')):
+                            audio_file = os.path.join(preset_path, f)
+                            break
+                    
+                    if audio_file:
+                        print(f"--- [v8 VOICE-LOCK] Loading Audio: {audio_file} ---", file=sys.stderr, flush=True)
+                        try:
+                            with open(audio_file, "rb") as f:
+                                audio_bytes = f.read()
+                            references.append(ServeReferenceAudio(
+                                audio=audio_bytes,
+                                text="" # Presets usually don't need text if audio is long enough, or we could look for .lab file
+                            ))
+                        except Exception as e:
+                            print(f"--- [v8 ERROR] Failed to load preset audio: {e} ---", file=sys.stderr, flush=True)
+                    else:
+                         print(f"--- [v8 WARNING] No audio file found in preset folder {preset_path} ---", file=sys.stderr, flush=True)
+
+            # Add explicit references from input if any (merging strategy)
             for ref in job_input.get("references", []):
                 references.append(ServeReferenceAudio(
                     audio=ref.get("audio"),
