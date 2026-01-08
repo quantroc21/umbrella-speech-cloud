@@ -254,10 +254,11 @@ try:
                         print(f"--- [v9 S3] Loaded reference audio from cache. ---", file=sys.stderr, flush=True)
                     except Exception as e:
                         print(f"--- [v9 ERROR] Failed to read cached audio: {e} ---", file=sys.stderr, flush=True)
+                else:
+                    print(f"--- [v10 INFO] Voice '{voice_id}' not in S3. Falling back to Local Disk... ---", file=sys.stderr, flush=True)
 
-            # 2. Fallback to Local Disk (v8.1 Logic)
-            elif voice_id:
-                # ... existing v8.1 local logic ...
+            # 2. Local Disk Fallback (Always run if references is still empty)
+            if voice_id and not references:
                 preset_path = os.path.join("/app/references", voice_id)
                 if os.path.exists(preset_path) and os.path.isdir(preset_path):
                      # ... existing finding logic ...
