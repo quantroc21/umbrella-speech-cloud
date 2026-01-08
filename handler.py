@@ -225,31 +225,69 @@ try:
                     print(f"--- [v9 S3] Cache MISS. Downloading... ---", file=sys.stderr, flush=True)
                     try:
                         # Try exact match first, then with extensions
-                        keys_to_try = [voice_id, f"{voice_id}.wav", f"voices/{voice_id}", f"voices/{voice_id}.wav"]
+                        # User structure: voice-clones/references/{id}/{id}.wav
+                        keys_to_try = [
+                            f"voice-clones/references/{voice_id}/{voice_id}.wav",
+                            f"voice-clones/references/{voice_id}/{voice_id}.mp3",
+                            f"references/{voice_id}/{voice_id}.wav",
+                            f"voices/{voice_id}/{voice_id}.wav",
+                            f"{voice_id}/{voice_id}.wav",
+                            f"{voice_id}.wav", 
+                            voice_id
+                        ]
                         downloaded = False
+                        found_key = None
                         
                         for key in keys_to_try:
                             try:
                                 s3_client.download_file(s3_bucket_name, key, local_voice_path)
                                 print(f"--- [v9 S3] Successfully downloaded: {key} ---", file=sys.stderr, flush=True)
                                 downloaded = True
+                                found_key = key
                                 break
                             except ClientError:
                                 continue
                         
                         if not downloaded:
                              print(f"--- [v9 ERROR] File not found in S3 bucket for ID: {voice_id} ---", file=sys.stderr, flush=True)
+                        elif found_key:
+                             # --- v11: Fetch Pair Transcript ---
+                             # Deduce text key: replace .wav/.mp3 with .txt
+                             root, ext = os.path.splitext(found_key)
+                             text_key = root + ".txt"
+                             local_text_path = local_voice_path.replace(os.path.splitext(local_voice_path)[1], ".txt")
+                             
+                             print(f"--- [v11 S3] Looking for transcript: {text_key} ---", file=sys.stderr, flush=True)
+                             try:
+                                 s3_client.download_file(s3_bucket_name, text_key, local_text_path)
+                                 print(f"--- [v11 S3] Found pair transcript! ---", file=sys.stderr, flush=True)
+                             except ClientError:
+                                 print(f"--- [v11 S3] No transcript found. Using default. ---", file=sys.stderr, flush=True)
+
                     except Exception as e:
                          print(f"--- [v9 ERROR] S3 Download Failed: {e} ---", file=sys.stderr, flush=True)
 
                 # Load into Reference
                 if os.path.exists(local_voice_path):
                     try:
+                        # Read audio
                         with open(local_voice_path, "rb") as f:
                             audio_bytes = f.read()
+                        
+                        # Read text if exists
+                        ref_text = ""
+                        local_text_path = local_voice_path.replace(os.path.splitext(local_voice_path)[1], ".txt")
+                        if os.path.exists(local_text_path):
+                             try:
+                                 with open(local_text_path, "r", encoding="utf-8") as ft:
+                                     ref_text = ft.read().strip()
+                                 print(f"--- [v11 S3] Using Transcript: {ref_text[:30]}... ---", file=sys.stderr, flush=True)
+                             except Exception as e:
+                                 print(f"--- [v11 ERROR] Failed to read transcript: {e} ---", file=sys.stderr, flush=True)
+
                         references.append(ServeReferenceAudio(
                             audio=audio_bytes,
-                            text="" 
+                            text=ref_text 
                         ))
                         print(f"--- [v9 S3] Loaded reference audio from cache. ---", file=sys.stderr, flush=True)
                     except Exception as e:
