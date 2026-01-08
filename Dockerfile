@@ -28,7 +28,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 COPY . .
 
 # Install dependencies using uv
-RUN uv pip install --system -e .
+RUN uv pip install --system -e . pydub boto3
 
 # --- CRITICAL: Download Models at Build Time ---
 # This ensures the models are inside the image, so "Cold Start" doesn't have to download them.
