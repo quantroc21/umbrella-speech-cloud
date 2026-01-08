@@ -136,6 +136,7 @@ const Index = () => {
         },
         body: JSON.stringify({
           input: {
+            task: "tts",
             text: finalText,
             reference_id: selectedVoice,
             chunk_length: advancedSettings.iterativeLength,
@@ -168,8 +169,9 @@ const Index = () => {
         const url = URL.createObjectURL(blob);
         setAudioUrl(url);
       } else {
-        console.error("RunPod Error:", data);
-        throw new Error("Invalid response from serverless endpoint (Check console)");
+        console.error("RunPod Error Detail:", data);
+        const errorMessage = data.error || data.output?.error || "Inference failed";
+        throw new Error(errorMessage);
       }
 
       toast({
