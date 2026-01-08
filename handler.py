@@ -65,7 +65,7 @@ try:
         mode="tts",
         device=DEVICE,
         half=True if DEVICE == "cuda" else False,           
-        compile=True,       
+        compile=False, # v10.6: Disable JIT Compile for faster Cold Start      
         llama_checkpoint_path=LLAMA_CHECKPOINT_PATH,
         decoder_checkpoint_path=DECODER_CHECKPOINT_PATH,
         decoder_config_name=DECODER_CONFIG_NAME
@@ -395,14 +395,14 @@ try:
                         chunk_speed = random.uniform(0.88, 0.92)
                             
                         # Generate Audio for this chunk
-                        print(f"--- [PROSODY] Chunk: '{current_chunk_text[:15]}...' | Spd: {chunk_speed:.2f} | Pse: {pause_duration:.2f}s ---", file=sys.stderr, flush=True)
+                        print(f"--- [PROSODY] Chunk: '{current_chunk_text[:15]}...' | Spd: {chunk_speed:.2f} | Pse: {pause_duration:.2f}s | Refs: {len(references)} ---", file=sys.stderr, flush=True)
                         
                         req = ServeTTSRequest(
                             text=current_chunk_text,
                             chunk_length=job_input.get("chunk_length", 200),
                             format="wav", 
-                            references=references,
-                            reference_id=job_input.get("reference_id"),
+                            references=references, # Passing the loaded [ServeReferenceAudio]
+                            reference_id=None, # IMPORTANT: Force use of 'references' list, ignore ID to prevent lookup conflicts
                             seed=job_input.get("seed"),
                             use_memory_cache=job_input.get("use_memory_cache", "off"),
                             normalize=job_input.get("normalize", True),
@@ -445,7 +445,7 @@ try:
                             chunk_length=job_input.get("chunk_length", 200),
                             format="wav", 
                             references=references,
-                            reference_id=job_input.get("reference_id"),
+                            reference_id=None, # Fix: Use loaded references
                             seed=job_input.get("seed"),
                             use_memory_cache=job_input.get("use_memory_cache", "off"),
                             normalize=job_input.get("normalize", True),
