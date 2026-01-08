@@ -329,25 +329,30 @@ try:
                     text=ref.get("text")
                 ))
 
-            # --- V11 PROSODY ENGINE ---
+            # --- V10.5 STOCHASTIC PROSODY ENGINE ---
             import soundfile as sf
             import re
+            import random
             from tools.server.inference import inference_wrapper
             
+            # Seed random for reproducibility if seed provided
+            if job_input.get("seed"):
+                random.seed(job_input.get("seed"))
+
             sample_rate = engine.decoder_model.sample_rate
             final_audio_segments = []
             
-            # Prosody: Split Text logic
+            # Prosody: Split Text logic (Paragraphs -> Sentences -> Phrases)
             paragraphs = [p for p in text.splitlines() if p.strip()]
             
-            print(f"--- [PROSODY] Processing {len(paragraphs)} paragraphs... ---", file=sys.stderr, flush=True)
+            print(f"--- [v10.5 PROSODY] Processing {len(paragraphs)} paragraphs (Stochastic Mode)... ---", file=sys.stderr, flush=True)
             
             for i, paragraph in enumerate(paragraphs):
                 is_last_paragraph = (i == len(paragraphs) - 1)
                 
-                # Split by punctuation allowing for multiple chars like ... or ?!
-                # We want to keep delimiters
-                chunks = re.split(r'([,;.\?!]+)', paragraph)
+                # regex to capture: ... | . | ! | ? | , | ; | — (em dash) | - (hyphen acting as break)
+                # We prioritize ... over . by placing it first
+                chunks = re.split(r'(\.\.\.|[.!?;]+|[—,]|\- )', paragraph)
                 
                 current_chunk_text = ""
                 
@@ -355,40 +360,59 @@ try:
                     if not token.strip():
                         continue
                         
-                    # Check if it's punctuation
-                    if re.match(r'^[,;.\?!]+$', token.strip()):
+                    # Check if it's punctuation delimiter
+                    # Matches any of our delimiters
+                    if re.match(r'^(\.\.\.|[.!?;]+|[—,]|\- )$', token.strip()):
                         current_chunk_text += token
+                        punct = token.strip()
                         
-                        # Just before generating, calculate pause and speed
-                        punct = token.strip()[-1]
+                        # --- STOCHASTIC PAUSE LOGIC ---
                         pause_duration = 0.0
-                        speed = 0.9 # Base rate reduction (10%)
                         
-                        if punct in ",;":
-                            pause_duration = 0.4
-                        elif punct in ".?!":
-                            pause_duration = 1.0
+                        # 1. Comma / Semicolon (Short Breath)
+                        if punct in [",", ";"]:
+                             # Research: 0.3s - 0.5s
+                             pause_duration = random.uniform(0.3, 0.5)
+                        
+                        # 2. Period / Exclamation / Question (Full Stop)
+                        elif any(c in punct for c in ".!?") and "..." not in punct:
+                             # Research: 0.8s - 1.2s
+                             pause_duration = random.uniform(0.8, 1.2)
+                        
+                        # 3. Ellipsis (Hesitation/Thinking)
+                        elif "..." in punct:
+                             # Research: 1.2s - 1.5s (Thinking time)
+                             pause_duration = random.uniform(1.2, 1.5)
+                        
+                        # 4. Dash (Sudden Break)
+                        elif "—" in punct or "-" in punct:
+                             # Research: 0.4s - 0.6s
+                             pause_duration = random.uniform(0.4, 0.6)
+                        
+                        # --- MICRO-SPEED VARIANCE ---
+                        # Base speed: 0.9 (Calm)
+                        # Variance: +/- 0.02 to avoid robotic metronome
+                        chunk_speed = random.uniform(0.88, 0.92)
                             
                         # Generate Audio for this chunk
-                        print(f"--- [PROSODY] Generatng chunk: '{current_chunk_text[:20]}...' (Speed: {speed}, Pause: {pause_duration}) ---", file=sys.stderr, flush=True)
+                        print(f"--- [PROSODY] Chunk: '{current_chunk_text[:15]}...' | Spd: {chunk_speed:.2f} | Pse: {pause_duration:.2f}s ---", file=sys.stderr, flush=True)
                         
                         req = ServeTTSRequest(
                             text=current_chunk_text,
                             chunk_length=job_input.get("chunk_length", 200),
-                            format="wav", # Internal format
+                            format="wav", 
                             references=references,
                             reference_id=job_input.get("reference_id"),
                             seed=job_input.get("seed"),
                             use_memory_cache=job_input.get("use_memory_cache", "off"),
                             normalize=job_input.get("normalize", True),
-                            # Ensure streaming is False to get full chunk
                             streaming=False,
                             max_new_tokens=job_input.get("max_new_tokens", 1024),
                             top_p=job_input.get("top_p", 0.7),
                             repetition_penalty=job_input.get("repetition_penalty", 1.2),
                             temperature=job_input.get("temperature", 0.7),
-                            pause_amount=0.0, # We handle pauses manually
-                            speed=speed,
+                            pause_amount=0.0,
+                            speed=chunk_speed,
                         )
                         
                         chunk_audio_data = []
@@ -397,33 +421,25 @@ try:
                                 chunk_audio_data.append(res)
                         
                         if chunk_audio_data:
-                            # Append audio
                             final_audio_segments.extend(chunk_audio_data)
                             
                             # Append Silence
                             if pause_duration > 0:
                                 silence_samples = int(sample_rate * pause_duration)
-                                final_audio_segments.append(np.zeros(silence_samples, dtype=np.int16)) # Assuming int16 or float output
-                                # IMPORTANT: inference returns float [-1, 1] often? 
-                                # inference_wrapper in `tools/server/inference.py` yields `result.audio[1]` directly from model.
-                                # Usually model output is float32. 
-                                # BUT line 33 in inference.py says: `yield (result.audio[1] * AMPLITUDE).astype(np.int16).tobytes()` for segments?
-                                # Wait, `inference_wrapper` case "final" yields `result.audio[1]`.
-                                # The previous code expected `np.ndarray`.
-                                # Let's assume float32 if unscaled, or whatever the model outputs.
-                                # To be safe with silence, we should match the type of the first chunk if possible, or use float32 zeros if float.
-                                # Actually, existing code did: `sf.write(audio_buffer, full_audio, sample_rate, format='WAV')`
-                                # So `full_audio` is expected to be compatible.
-                                # If I add zeros, I should use float32 zeros if the audio is float32.
-                                pass
-                        
+                                # Match dtype of audio (usually float32 from model, but let's check)
+                                if chunk_audio_data[0].dtype.kind == 'i':
+                                     final_audio_segments.append(np.zeros(silence_samples, dtype=chunk_audio_data[0].dtype))
+                                else:
+                                     final_audio_segments.append(np.zeros(silence_samples, dtype=np.float32))
+
                         current_chunk_text = "" # Reset
                         
                     else:
                         current_chunk_text += token
                 
-                # Loose end
+                # Loose end (End of paragraph without punctuation)
                 if current_chunk_text.strip():
+                        print(f"--- [PROSODY] Final Chunk (Para): '{current_chunk_text[:15]}...' ---", file=sys.stderr, flush=True)
                         req = ServeTTSRequest(
                             text=current_chunk_text,
                             chunk_length=job_input.get("chunk_length", 200),
@@ -445,24 +461,20 @@ try:
                             if isinstance(res, np.ndarray):
                                 final_audio_segments.append(res)
                 
-                # Paragraph Pause
+                # Paragraph Pause (Research: 1.5s - 2.0s)
                 if not is_last_paragraph:
-                     # 1.8s
-                     silence_samples = int(sample_rate * 1.8)
-                     # Using float32 zeros to be safe as most torch models output float
+                     para_pause = random.uniform(1.5, 2.0)
+                     silence_samples = int(sample_rate * para_pause)
+                     print(f"--- [PROSODY] Paragraph Break: {para_pause:.2f}s ---", file=sys.stderr, flush=True)
                      final_audio_segments.append(np.zeros(silence_samples, dtype=np.float32))
 
             # Final Stitching
             audio_buffer = io.BytesIO()
             
             if final_audio_segments:
-                # Concatenate. Ensure consistent dtype
-                # Check first element type
                 if final_audio_segments[0].dtype.kind == 'i':
-                    # Int
                     final_audio = np.concatenate(final_audio_segments)
                 else:
-                    # Float
                     final_audio = np.concatenate(final_audio_segments).astype(np.float32)
                 
                 sf.write(audio_buffer, final_audio, sample_rate, format='WAV')
