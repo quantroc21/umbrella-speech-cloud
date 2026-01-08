@@ -65,7 +65,7 @@ try:
         mode="tts",
         device=DEVICE,
         half=True if DEVICE == "cuda" else False,           
-        compile=False, # v10.6: Disable JIT Compile for faster Cold Start      
+        compile=True, # v10.7: Re-enable JIT for 186 tokens/s speed (Trade-off: slower startup)       
         llama_checkpoint_path=LLAMA_CHECKPOINT_PATH,
         decoder_checkpoint_path=DECODER_CHECKPOINT_PATH,
         decoder_config_name=DECODER_CONFIG_NAME
