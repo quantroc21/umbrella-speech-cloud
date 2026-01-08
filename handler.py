@@ -291,54 +291,152 @@ try:
                     text=ref.get("text")
                 ))
 
-            req = ServeTTSRequest(
-                text=text,
-                chunk_length=job_input.get("chunk_length", 200),
-                format=job_input.get("format", "wav"),
-                references=references,
-                reference_id=job_input.get("reference_id"),
-                seed=job_input.get("seed"),
-                use_memory_cache=job_input.get("use_memory_cache", "off"),
-                normalize=job_input.get("normalize", True),
-                streaming=job_input.get("streaming", False),
-                max_new_tokens=job_input.get("max_new_tokens", 1024),
-                top_p=job_input.get("top_p", 0.7),
-                repetition_penalty=job_input.get("repetition_penalty", 1.2),
-                temperature=job_input.get("temperature", 0.7),
-                pause_amount=job_input.get("pause_amount", 0.0),
-                speed=job_input.get("speed", 1.0),
-            )
-
+            # --- V11 PROSODY ENGINE ---
             import soundfile as sf
-            audio_buffer = io.BytesIO()
+            import re
             from tools.server.inference import inference_wrapper
             
-            # The inference_wrapper yields chunks. 
-            # In non-streaming mode, it yields one 'final' chunk as a numpy array.
-            # In streaming mode, it yields segments as bytes.
-            audio_data = []
             sample_rate = engine.decoder_model.sample_rate
-
-            for chunk in inference_wrapper(req, engine):
-                if isinstance(chunk, bytes):
-                    audio_buffer.write(chunk)
-                elif isinstance(chunk, np.ndarray):
-                    audio_data.append(chunk)
+            final_audio_segments = []
             
-            # If we collected numpy arrays, write them as a WAV file
-            if audio_data:
-                full_audio = np.concatenate(audio_data) if len(audio_data) > 1 else audio_data[0]
-                sf.write(audio_buffer, full_audio, sample_rate, format='WAV')
-                    
+            # Prosody: Split Text logic
+            paragraphs = [p for p in text.splitlines() if p.strip()]
+            
+            print(f"--- [PROSODY] Processing {len(paragraphs)} paragraphs... ---", file=sys.stderr, flush=True)
+            
+            for i, paragraph in enumerate(paragraphs):
+                is_last_paragraph = (i == len(paragraphs) - 1)
+                
+                # Split by punctuation allowing for multiple chars like ... or ?!
+                # We want to keep delimiters
+                chunks = re.split(r'([,;.\?!]+)', paragraph)
+                
+                current_chunk_text = ""
+                
+                for token in chunks:
+                    if not token.strip():
+                        continue
+                        
+                    # Check if it's punctuation
+                    if re.match(r'^[,;.\?!]+$', token.strip()):
+                        current_chunk_text += token
+                        
+                        # Just before generating, calculate pause and speed
+                        punct = token.strip()[-1]
+                        pause_duration = 0.0
+                        speed = 0.9 # Base rate reduction (10%)
+                        
+                        if punct in ",;":
+                            pause_duration = 0.4
+                        elif punct in ".?!":
+                            pause_duration = 1.0
+                            
+                        # Generate Audio for this chunk
+                        print(f"--- [PROSODY] Generatng chunk: '{current_chunk_text[:20]}...' (Speed: {speed}, Pause: {pause_duration}) ---", file=sys.stderr, flush=True)
+                        
+                        req = ServeTTSRequest(
+                            text=current_chunk_text,
+                            chunk_length=job_input.get("chunk_length", 200),
+                            format="wav", # Internal format
+                            references=references,
+                            reference_id=job_input.get("reference_id"),
+                            seed=job_input.get("seed"),
+                            use_memory_cache=job_input.get("use_memory_cache", "off"),
+                            normalize=job_input.get("normalize", True),
+                            # Ensure streaming is False to get full chunk
+                            streaming=False,
+                            max_new_tokens=job_input.get("max_new_tokens", 1024),
+                            top_p=job_input.get("top_p", 0.7),
+                            repetition_penalty=job_input.get("repetition_penalty", 1.2),
+                            temperature=job_input.get("temperature", 0.7),
+                            pause_amount=0.0, # We handle pauses manually
+                            speed=speed,
+                        )
+                        
+                        chunk_audio_data = []
+                        for res in inference_wrapper(req, engine):
+                            if isinstance(res, np.ndarray):
+                                chunk_audio_data.append(res)
+                        
+                        if chunk_audio_data:
+                            # Append audio
+                            final_audio_segments.extend(chunk_audio_data)
+                            
+                            # Append Silence
+                            if pause_duration > 0:
+                                silence_samples = int(sample_rate * pause_duration)
+                                final_audio_segments.append(np.zeros(silence_samples, dtype=np.int16)) # Assuming int16 or float output
+                                # IMPORTANT: inference returns float [-1, 1] often? 
+                                # inference_wrapper in `tools/server/inference.py` yields `result.audio[1]` directly from model.
+                                # Usually model output is float32. 
+                                # BUT line 33 in inference.py says: `yield (result.audio[1] * AMPLITUDE).astype(np.int16).tobytes()` for segments?
+                                # Wait, `inference_wrapper` case "final" yields `result.audio[1]`.
+                                # The previous code expected `np.ndarray`.
+                                # Let's assume float32 if unscaled, or whatever the model outputs.
+                                # To be safe with silence, we should match the type of the first chunk if possible, or use float32 zeros if float.
+                                # Actually, existing code did: `sf.write(audio_buffer, full_audio, sample_rate, format='WAV')`
+                                # So `full_audio` is expected to be compatible.
+                                # If I add zeros, I should use float32 zeros if the audio is float32.
+                                pass
+                        
+                        current_chunk_text = "" # Reset
+                        
+                    else:
+                        current_chunk_text += token
+                
+                # Loose end
+                if current_chunk_text.strip():
+                        req = ServeTTSRequest(
+                            text=current_chunk_text,
+                            chunk_length=job_input.get("chunk_length", 200),
+                            format="wav", 
+                            references=references,
+                            reference_id=job_input.get("reference_id"),
+                            seed=job_input.get("seed"),
+                            use_memory_cache=job_input.get("use_memory_cache", "off"),
+                            normalize=job_input.get("normalize", True),
+                            streaming=False,
+                            max_new_tokens=job_input.get("max_new_tokens", 1024),
+                            top_p=job_input.get("top_p", 0.7),
+                            repetition_penalty=job_input.get("repetition_penalty", 1.2),
+                            temperature=job_input.get("temperature", 0.7),
+                            pause_amount=0.0,
+                            speed=0.9,
+                        )
+                        for res in inference_wrapper(req, engine):
+                            if isinstance(res, np.ndarray):
+                                final_audio_segments.append(res)
+                
+                # Paragraph Pause
+                if not is_last_paragraph:
+                     # 1.8s
+                     silence_samples = int(sample_rate * 1.8)
+                     # Using float32 zeros to be safe as most torch models output float
+                     final_audio_segments.append(np.zeros(silence_samples, dtype=np.float32))
+
+            # Final Stitching
+            audio_buffer = io.BytesIO()
+            
+            if final_audio_segments:
+                # Concatenate. Ensure consistent dtype
+                # Check first element type
+                if final_audio_segments[0].dtype.kind == 'i':
+                    # Int
+                    final_audio = np.concatenate(final_audio_segments)
+                else:
+                    # Float
+                    final_audio = np.concatenate(final_audio_segments).astype(np.float32)
+                
+                sf.write(audio_buffer, final_audio, sample_rate, format='WAV')
+            else:
+                 return {"error": "No audio data generated", "status": "failed"}
+
             audio_buffer.seek(0)
             data = audio_buffer.read()
-            if not data:
-                return {"error": "No audio data generated", "status": "failed"}
-
             audio_base64 = base64.b64encode(data).decode("utf-8")
             
             # v10.1: Memory Cleanup
-            del audio_data, data, audio_buffer, req
+            del final_audio_segments, data, audio_buffer
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 print(f"--- [v10.1 MEMORY] Cleanup complete. Max VRAM: {torch.cuda.max_memory_allocated() / 1024**2:.2f} MiB ---", file=sys.stderr, flush=True)
@@ -348,10 +446,6 @@ try:
                 "format": "wav",
                 "status": "COMPLETED"
             }
-        except Exception as e:
-            print(f"--- [ERROR] Inference failed: {str(e)} ---", file=sys.stderr, flush=True)
-            traceback.print_exc()
-            return {"error": str(e), "status": "failed"}
         finally:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
