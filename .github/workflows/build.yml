@@ -38,7 +38,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: hoaitroc2212/fish-speech:v8.1
+          tags: hoaitroc2212/fish-speech:v9
           build-args: |
              HF_TOKEN=${{ secrets.HF_TOKEN }}
           # Cache to speed up future builds

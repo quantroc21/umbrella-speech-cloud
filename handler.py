@@ -45,6 +45,9 @@ try:
     import torch
     import numpy as np
     import runpod
+    import boto3
+    from botocore.exceptions import ClientError
+
     
     print("--- [DEBUG] Importing Fish Speech Engines... ---", file=sys.stderr, flush=True)
     from tools.server.model_manager import ModelManager
@@ -98,10 +101,79 @@ try:
             # Prepare references
             references = []
             
-            # v8.1 FIX: Load Preset from Disk if ID matches
-            if voice_id:
+            # v9: S3 Voice Storage Logic
+            voice_id = job_input.get("reference_id")
+            print(f"--- [v8 VOICE-LOCK] Target Voice ID: {voice_id} ---", file=sys.stderr, flush=True)
+
+            references = []
+
+            # 1. Check for S3 Configuration
+            s3_access_key = os.environ.get("S3_ACCESS_KEY")
+            s3_secret_key = os.environ.get("S3_SECRET_KEY")
+            s3_bucket_name = os.environ.get("S3_BUCKET_NAME")
+            s3_endpoint_url = os.environ.get("S3_ENDPOINT_URL") # Optional
+
+            if voice_id and s3_access_key and s3_secret_key and s3_bucket_name:
+                print(f"--- [v9 S3] Attempting to fetch '{voice_id}' from S3... ---", file=sys.stderr, flush=True)
+                
+                # Setup S3 Client
+                s3_kwargs = {
+                    'aws_access_key_id': s3_access_key,
+                    'aws_secret_access_key': s3_secret_key,
+                }
+                if s3_endpoint_url:
+                    s3_kwargs['endpoint_url'] = s3_endpoint_url
+                
+                s3_client = boto3.client('s3', **s3_kwargs)
+
+                # Local Cache Path
+                # Sanitize voice_id to prevent path traversal
+                safe_voice_id = "".join([c for c in voice_id if c.isalpha() or c.isdigit() or c in (' ', '_', '-')]).strip()
+                local_voice_path = f"/tmp/{safe_voice_id}.wav"
+
+                # Check Cache First
+                if os.path.exists(local_voice_path):
+                     print(f"--- [v9 S3] Cache HIT for {safe_voice_id} ---", file=sys.stderr, flush=True)
+                else:
+                    print(f"--- [v9 S3] Cache MISS. Downloading... ---", file=sys.stderr, flush=True)
+                    try:
+                        # Try exact match first, then with extensions
+                        keys_to_try = [voice_id, f"{voice_id}.wav", f"voices/{voice_id}", f"voices/{voice_id}.wav"]
+                        downloaded = False
+                        
+                        for key in keys_to_try:
+                            try:
+                                s3_client.download_file(s3_bucket_name, key, local_voice_path)
+                                print(f"--- [v9 S3] Successfully downloaded: {key} ---", file=sys.stderr, flush=True)
+                                downloaded = True
+                                break
+                            except ClientError:
+                                continue
+                        
+                        if not downloaded:
+                             print(f"--- [v9 ERROR] File not found in S3 bucket for ID: {voice_id} ---", file=sys.stderr, flush=True)
+                    except Exception as e:
+                         print(f"--- [v9 ERROR] S3 Download Failed: {e} ---", file=sys.stderr, flush=True)
+
+                # Load into Reference
+                if os.path.exists(local_voice_path):
+                    try:
+                        with open(local_voice_path, "rb") as f:
+                            audio_bytes = f.read()
+                        references.append(ServeReferenceAudio(
+                            audio=audio_bytes,
+                            text="" 
+                        ))
+                        print(f"--- [v9 S3] Loaded reference audio from cache. ---", file=sys.stderr, flush=True)
+                    except Exception as e:
+                        print(f"--- [v9 ERROR] Failed to read cached audio: {e} ---", file=sys.stderr, flush=True)
+
+            # 2. Fallback to Local Disk (v8.1 Logic)
+            elif voice_id:
+                # ... existing v8.1 local logic ...
                 preset_path = os.path.join("/app/references", voice_id)
                 if os.path.exists(preset_path) and os.path.isdir(preset_path):
+                     # ... existing finding logic ...
                     print(f"--- [v8 VOICE-LOCK] Found Preset Folder: {preset_path} ---", file=sys.stderr, flush=True)
                     # Find first audio file
                     audio_file = None
@@ -117,7 +189,7 @@ try:
                                 audio_bytes = f.read()
                             references.append(ServeReferenceAudio(
                                 audio=audio_bytes,
-                                text="" # Presets usually don't need text if audio is long enough, or we could look for .lab file
+                                text="" 
                             ))
                         except Exception as e:
                             print(f"--- [v8 ERROR] Failed to load preset audio: {e} ---", file=sys.stderr, flush=True)

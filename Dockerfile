@@ -12,7 +12,8 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
     ffmpeg \
-    git \
+    pydub \
+    boto3 \
     libsndfile1 \
     portaudio19-dev \
     python3-dev \
