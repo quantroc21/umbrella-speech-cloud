@@ -337,6 +337,12 @@ try:
 
             audio_base64 = base64.b64encode(data).decode("utf-8")
             
+            # v10.1: Memory Cleanup
+            del audio_data, data, audio_buffer, req
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                print(f"--- [v10.1 MEMORY] Cleanup complete. Max VRAM: {torch.cuda.max_memory_allocated() / 1024**2:.2f} MiB ---", file=sys.stderr, flush=True)
+
             return {
                 "audio_base64": audio_base64,
                 "format": "wav",
@@ -346,6 +352,9 @@ try:
             print(f"--- [ERROR] Inference failed: {str(e)} ---", file=sys.stderr, flush=True)
             traceback.print_exc()
             return {"error": str(e), "status": "failed"}
+        finally:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
     # Start the worker
     if __name__ == "__main__":
