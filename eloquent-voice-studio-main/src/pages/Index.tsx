@@ -47,32 +47,51 @@ const Index = () => {
 
 
 
-  const fetchVoices = () => {
-    fetch(`${API_BASE}/v1/references/list`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.reference_ids) {
-          const loadedVoices = data.reference_ids.map((id: string) => ({
-            id,
-            name: id,
-            description: "Saved Voice"
-          }));
+  const fetchVoices = async () => {
+    try {
+      // v10: Fetch list of uploaded voices from RunPod (which checks R2)
+      const key = ""; // REMOVED_FOR_PUSH
 
-          // Combine presets with loaded voices, avoiding duplicates
-          setVoices(prev => {
-            const combined = [...PRESET_VOICES];
-            loadedVoices.forEach((v: any) => {
-              if (!combined.find(p => p.id === v.id)) {
-                combined.push(v);
-              }
-            });
-            return combined;
-          });
-        }
-      })
-      .catch(err => {
-        console.warn("Local backend unreachable, using presets only:", err);
+      const response = await fetch(`${API_BASE}/api/serverless`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${key}`
+        },
+        body: JSON.stringify({
+          input: {
+            task: "list_voices"
+          }
+        }),
       });
+
+      if (!response.ok) throw new Error("Failed to fetch cloud voices");
+
+      const data = await response.json();
+
+      if (data.status === "COMPLETED" && data.output?.voices) {
+        const cloudVoices = data.output.voices.map((v: any) => ({
+          id: v.id,
+          name: v.name,
+          description: "Cloud Voice"
+        }));
+
+        setVoices(prev => {
+          // Keep presets, add cloud voices, avoid duplicates
+          const combined = [...PRESET_VOICES];
+          cloudVoices.forEach((cv: any) => {
+            if (!combined.find(p => p.id === cv.id)) {
+              combined.push(cv);
+            }
+          });
+          return combined;
+        });
+      }
+    } catch (err) {
+      console.warn("Could not load cloud voices:", err);
+      // Fallback: Just show presets
+      setVoices(PRESET_VOICES);
+    }
   };
 
   useEffect(() => {

@@ -34,47 +34,75 @@ export function AddVoiceDialog({ open, onOpenChange, onSuccess, apiBase }: AddVo
     };
 
     const handleUpload = async () => {
-        if (!name.trim() || !text.trim() || !file) {
+        if (!name.trim() || !file) {
             toast({
                 title: "Missing fields",
-                description: "Please provide a name, reference text, and an audio file.",
+                description: "Please provide a name and an audio file.",
                 variant: "destructive",
             });
             return;
         }
 
         setIsUploading(true);
-        const formData = new FormData();
-        formData.append("id", name.trim());
-        formData.append("text", text.trim());
-        formData.append("audio", file);
 
         try {
-            const response = await fetch(`${apiBase}/v1/references/add`, {
+            // v10: Step 1 - Get Presigned URL from RunPod
+            const key = ""; // REMOVED_FOR_PUSH
+
+            const urlResponse = await fetch(`${apiBase}/api/serverless`, {
                 method: "POST",
-                body: formData,
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${key}`
+                },
+                body: JSON.stringify({
+                    input: {
+                        task: "generate_presigned_url",
+                        filename: `${name.trim()}.wav`
+                    }
+                })
             });
 
-            const data = await response.json();
+            if (!urlResponse.ok) throw new Error("Failed to get upload permission");
+            const urlData = await urlResponse.json();
 
-            if (response.ok && data.success) {
-                toast({
-                    title: "Voice Added",
-                    description: `Voice "${name}" has been saved successfully.`,
-                });
-                onSuccess();
-                onOpenChange(false);
-                // Clear form
-                setName("");
-                setText("");
-                setFile(null);
-            } else {
-                throw new Error(data.message || "Failed to upload voice");
+            if (urlData.status !== "COMPLETED" || !urlData.output?.upload_url) {
+                throw new Error(urlData.output?.error || "Server refused to generate upload URL");
             }
+
+            const { upload_url, file_key } = urlData.output;
+
+            // Step 2 - Upload direct to Cloudflare R2
+            const uploadResponse = await fetch(upload_url, {
+                method: "PUT",
+                body: file,
+                headers: {
+                    "Content-Type": file.type
+                }
+            });
+
+            if (!uploadResponse.ok) {
+                console.error("Upload failed:", await uploadResponse.text());
+                throw new Error("Cloudflare upload failed (Check CORS settings)");
+            }
+
+            toast({
+                title: "Voice Uploaded",
+                description: `Voice "${name}" is now saved in Cloudflare R2.`,
+            });
+
+            onSuccess();
+            onOpenChange(false);
+
+            // Clear form
+            setName("");
+            setFile(null);
+
         } catch (error: any) {
+            console.error(error);
             toast({
                 title: "Upload Failed",
-                description: error.message || "Could not connect to the backend.",
+                description: error.message || "Could not complete the upload.",
                 variant: "destructive",
             });
         } finally {

@@ -83,6 +83,93 @@ try:
         try:
             job_input = job["input"]
             text = job_input.get("text")
+            task = job_input.get("task", "tts") # Default to TTS
+
+            # --- v10: Presigned URL Generation ---
+            if task == "generate_presigned_url":
+                filename = job_input.get("filename")
+                if not filename:
+                    return {"error": "Filename required", "status": "failed"}
+
+                print(f"--- [v10 UPLOAD] Generating URL for: {filename} ---", file=sys.stderr, flush=True)
+
+                s3_access_key = os.environ.get("S3_ACCESS_KEY")
+                s3_secret_key = os.environ.get("S3_SECRET_KEY")
+                s3_bucket_name = os.environ.get("S3_BUCKET_NAME")
+                s3_endpoint_url = os.environ.get("S3_ENDPOINT_URL")
+
+                if not (s3_access_key and s3_secret_key and s3_bucket_name):
+                    return {"error": "S3 Not Configured", "status": "failed"}
+
+                try:
+                    s3_kwargs = {
+                        'aws_access_key_id': s3_access_key,
+                        'aws_secret_access_key': s3_secret_key,
+                    }
+                    if s3_endpoint_url:
+                        s3_kwargs['endpoint_url'] = s3_endpoint_url
+
+                    s3_client = boto3.client('s3', **s3_kwargs)
+                    
+                    # Sanitize filename
+                    safe_filename = "".join([c for c in filename if c.isalpha() or c.isdigit() or c in (' ', '_', '-', '.')]).strip()
+                    
+                    # Generate Presigned URL for PUT
+                    presigned_url = s3_client.generate_presigned_url(
+                        'put_object',
+                        Params={'Bucket': s3_bucket_name, 'Key': safe_filename},
+                        ExpiresIn=300 # 5 minutes
+                    )
+                    
+                    return {
+                        "upload_url": presigned_url,
+                        "file_key": safe_filename, # The ID the frontend should save
+                        "status": "COMPLETED"
+                    }
+                except Exception as e:
+                     print(f"--- [v10 ERROR] Failed to generate URL: {e} ---", file=sys.stderr, flush=True)
+                     return {"error": str(e), "status": "failed"}
+
+            # --- v10: List Voices from S3 ---
+            if task == "list_voices":
+                print(f"--- [v10 LIST] Fetching voices from S3... ---", file=sys.stderr, flush=True)
+                s3_access_key = os.environ.get("S3_ACCESS_KEY")
+                s3_secret_key = os.environ.get("S3_SECRET_KEY")
+                s3_bucket_name = os.environ.get("S3_BUCKET_NAME")
+                s3_endpoint_url = os.environ.get("S3_ENDPOINT_URL")
+
+                if not (s3_access_key and s3_secret_key and s3_bucket_name):
+                    return {"voices": [], "status": "COMPLETED", "warning": "S3 Not Configured"}
+
+                try:
+                    s3_kwargs = {
+                        'aws_access_key_id': s3_access_key,
+                        'aws_secret_access_key': s3_secret_key,
+                    }
+                    if s3_endpoint_url:
+                        s3_kwargs['endpoint_url'] = s3_endpoint_url
+
+                    s3_client = boto3.client('s3', **s3_kwargs)
+                    response = s3_client.list_objects_v2(Bucket=s3_bucket_name)
+                    
+                    voices = []
+                    if 'Contents' in response:
+                        for obj in response['Contents']:
+                            key = obj['Key']
+                            if key.endswith(('.wav', '.mp3', '.flac')):
+                                # Remove extension for display name
+                                name = os.path.splitext(key)[0]
+                                voices.append({"id": key, "name": name})
+                    
+                    return {
+                        "voices": voices,
+                        "status": "COMPLETED"
+                    }
+                except Exception as e:
+                    print(f"--- [v10 ERROR] Failed to list voices: {e} ---", file=sys.stderr, flush=True)
+                    return {"error": str(e), "status": "failed"}
+            
+            # --- Standard TTS Task ---
             if not text:
                 return {"error": "No text provided"}
 
