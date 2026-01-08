@@ -356,7 +356,7 @@ try:
                 
                 current_chunk_text = ""
                 
-                for token in chunks:
+                for j, token in enumerate(chunks):
                     if not token.strip():
                         continue
                         
@@ -366,34 +366,42 @@ try:
                         current_chunk_text += token
                         punct = token.strip()
                         
-                        # --- STOCHASTIC PAUSE LOGIC ---
+                        # --- STOCHASTIC PAUSE LOGIC (v10.8 Tighter) ---
                         pause_duration = 0.0
                         
-                        # 1. Comma / Semicolon (Short Breath)
+                        # 1. Comma / Semicolon (Barely noticeable breath)
                         if punct in [",", ";"]:
-                             # Research: 0.3s - 0.5s
-                             pause_duration = random.uniform(0.3, 0.5)
+                             # v10.8: 0.1s - 0.2s
+                             pause_duration = random.uniform(0.1, 0.2)
                         
-                        # 2. Period / Exclamation / Question (Full Stop)
+                        # 2. Period / Exclamation / Question (Natural Flow)
                         elif any(c in punct for c in ".!?") and "..." not in punct:
-                             # Research: 0.8s - 1.2s
-                             pause_duration = random.uniform(0.8, 1.2)
-                        
-                        # 3. Ellipsis (Hesitation/Thinking)
-                        elif "..." in punct:
-                             # Research: 1.2s - 1.5s (Thinking time)
-                             pause_duration = random.uniform(1.2, 1.5)
-                        
-                        # 4. Dash (Sudden Break)
-                        elif "—" in punct or "-" in punct:
-                             # Research: 0.4s - 0.6s
+                             # v10.8: 0.4s - 0.6s
                              pause_duration = random.uniform(0.4, 0.6)
                         
-                        # --- MICRO-SPEED VARIANCE ---
-                        # Base speed: 0.9 (Calm)
-                        # Variance: +/- 0.02 to avoid robotic metronome
-                        chunk_speed = random.uniform(0.88, 0.92)
-                            
+                        # 3. Ellipsis (Hesitation)
+                        elif "..." in punct:
+                             # v10.8: 1.0s - 1.2s
+                             pause_duration = random.uniform(1.0, 1.2)
+                        
+                        # 4. Dash (Quick Break)
+                        elif "—" in punct or "-" in punct:
+                             # v10.8: 0.2s - 0.4s
+                             pause_duration = random.uniform(0.2, 0.4)
+                        
+                        # --- VARIABLE SPEED DE-CELERATION (Landing the message) ---
+                        # Default Speed: Slightly brisk (0.95 - 1.05)
+                        chunk_speed = random.uniform(0.95, 1.05)
+                        
+                        # Check if it's a sentence end AND it's the last chunk of the paragraph
+                        # We check if we are within the last 2 items (Ref accounting for potential trailing empty string)
+                        is_sentence_end = any(c in punct for c in ".!?")
+                        is_paragraph_end = (j >= len(chunks) - 2)
+                        
+                        if is_sentence_end and is_paragraph_end:
+                            # Slow down ONLY at the very end to "land" the thought
+                            chunk_speed = random.uniform(0.80, 0.85)
+
                         # Generate Audio for this chunk
                         print(f"--- [PROSODY] Chunk: '{current_chunk_text[:15]}...' | Spd: {chunk_speed:.2f} | Pse: {pause_duration:.2f}s | Refs: {len(references)} ---", file=sys.stderr, flush=True)
                         
@@ -461,9 +469,9 @@ try:
                             if isinstance(res, np.ndarray):
                                 final_audio_segments.append(res)
                 
-                # Paragraph Pause (Research: 1.5s - 2.0s)
+                # Paragraph Pause (v10.8: 0.8s - 1.2s)
                 if not is_last_paragraph:
-                     para_pause = random.uniform(1.5, 2.0)
+                     para_pause = random.uniform(0.8, 1.2)
                      silence_samples = int(sample_rate * para_pause)
                      print(f"--- [PROSODY] Paragraph Break: {para_pause:.2f}s ---", file=sys.stderr, flush=True)
                      final_audio_segments.append(np.zeros(silence_samples, dtype=np.float32))

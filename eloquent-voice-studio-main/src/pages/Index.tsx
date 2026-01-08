@@ -13,7 +13,7 @@ import { AddVoiceDialog } from "@/components/AddVoiceDialog";
 const API_BASE = window.location.origin;
 
 // v8 Module 3: Threshold Constant
-const MIN_CHAR_THRESHOLD = 1200;
+const MIN_CHAR_THRESHOLD = 500;
 
 const Index = () => {
   const PRESET_VOICES = [
