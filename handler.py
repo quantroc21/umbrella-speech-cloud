@@ -173,11 +173,11 @@ try:
             if not text:
                 return {"error": "No text provided"}
 
-            # v8 Module 3: 1200 Character Threshold
-            if len(text) < 1200:
-                print(f"--- [v8 GUARD] Request rejected. Length: {len(text)} < 1200 ---", file=sys.stderr, flush=True)
+            # v8 Module 3: 500 Character Threshold (Lowered in v10.9)
+            if len(text) < 500:
+                print(f"--- [v10.9 GUARD] Request rejected. Length: {len(text)} < 500 ---", file=sys.stderr, flush=True)
                 return {
-                    "error": f"Input must be at least 1200 characters. (Current: {len(text)})",
+                    "error": f"Input must be at least 500 characters. (Current: {len(text)})",
                     "status": "failed"
                 }
 
