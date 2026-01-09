@@ -85,7 +85,72 @@ try:
             text = job_input.get("text")
             task = job_input.get("task", "tts") # Default to TTS
 
-            # --- v10: Presigned URL Generation ---
+            # --- v11: Proxy Upload (Bypass CORS) ---
+            if task == "proxy_upload":
+                filename = job_input.get("filename")
+                audio_b64 = job_input.get("audio_b64")
+                text_content = job_input.get("text", "") # Optional transcript
+                
+                if not filename or not audio_b64:
+                    return {"error": "Filename and audio data required", "status": "failed"}
+
+                print(f"--- [v11 PROXY] Uploading: {filename} ---", file=sys.stderr, flush=True)
+
+                s3_access_key = os.environ.get("S3_ACCESS_KEY")
+                s3_secret_key = os.environ.get("S3_SECRET_KEY")
+                s3_bucket_name = os.environ.get("S3_BUCKET_NAME")
+                s3_endpoint_url = os.environ.get("S3_ENDPOINT_URL")
+
+                if not (s3_access_key and s3_secret_key and s3_bucket_name):
+                    return {"error": "S3 Not Configured on Backend", "status": "failed"}
+
+                try:
+                    s3_kwargs = {
+                        'aws_access_key_id': s3_access_key,
+                        'aws_secret_access_key': s3_secret_key,
+                    }
+                    if s3_endpoint_url:
+                        s3_kwargs['endpoint_url'] = s3_endpoint_url
+
+                    s3_client = boto3.client('s3', **s3_kwargs)
+                    
+                    # Sanitize filename & ID
+                    voice_name = os.path.splitext(filename)[0]
+                    safe_name = "".join([c for c in voice_name if c.isalpha() or c.isdigit() or c in (' ', '_', '-')]).strip()
+                    
+                    # Target Paths: voice-clones/references/{id}/{id}.wav
+                    audio_key = f"voice-clones/references/{safe_name}/{safe_name}.wav"
+                    text_key = f"voice-clones/references/{safe_name}/{safe_name}.txt"
+
+                    # Decode and Upload Audio
+                    audio_data = base64.b64decode(audio_b64)
+                    s3_client.put_object(
+                        Bucket=s3_bucket_name,
+                        Key=audio_key,
+                        Body=audio_data,
+                        ContentType="audio/wav"
+                    )
+
+                    # Upload Transcript if provided
+                    if text_content:
+                        s3_client.put_object(
+                            Bucket=s3_bucket_name,
+                            Key=text_key,
+                            Body=text_content.encode('utf-8'),
+                            ContentType="text/plain"
+                        )
+
+                    print(f"--- [v11 PROXY] Successfully saved: {safe_name} ---", file=sys.stderr, flush=True)
+                    return {
+                        "message": f"Voice '{safe_name}' saved successfully",
+                        "voice_id": safe_name,
+                        "status": "COMPLETED"
+                    }
+                except Exception as e:
+                    print(f"--- [v11 ERROR] Proxy Upload Failed: {e} ---", file=sys.stderr, flush=True)
+                    return {"error": str(e), "status": "failed"}
+
+            # --- v10: Presigned URL Generation (LEAVE FOR LEGACY COMPATIBILITY) ---
             if task == "generate_presigned_url":
                 filename = job_input.get("filename")
                 if not filename:

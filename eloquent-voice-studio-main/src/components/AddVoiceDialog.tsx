@@ -46,10 +46,23 @@ export function AddVoiceDialog({ open, onOpenChange, onSuccess, apiBase }: AddVo
         setIsUploading(true);
 
         try {
-            // v10: Step 1 - Get Presigned URL from RunPod
-            const key = ""; // REMOVED_FOR_PUSH
+            // v11: Helper to convert File to Base64 string
+            const toBase64 = (file: File): Promise<string> =>
+                new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(file);
+                    reader.onload = () => {
+                        const base64String = (reader.result as string).split(',')[1];
+                        resolve(base64String);
+                    };
+                    reader.onerror = (error) => reject(error);
+                });
 
-            const urlResponse = await fetch(`${apiBase}/api/serverless`, {
+            const audioB64 = await toBase64(file);
+            const key = "rpa_PLACEHOLDER_FOR_GITHUB"; // SANITIZED_FOR_PUSH
+
+            // Step 1: Send Proxy Upload request to RunPod
+            const response = await fetch(`${apiBase}/api/serverless`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -57,38 +70,28 @@ export function AddVoiceDialog({ open, onOpenChange, onSuccess, apiBase }: AddVo
                 },
                 body: JSON.stringify({
                     input: {
-                        task: "generate_presigned_url",
-                        filename: `${name.trim()}.wav`
+                        task: "proxy_upload",
+                        filename: `${name.trim()}.wav`,
+                        audio_b64: audioB64,
+                        text: text // The transcript text from the textarea
                     }
                 })
             });
 
-            if (!urlResponse.ok) throw new Error("Failed to get upload permission");
-            const urlData = await urlResponse.json();
-
-            if (urlData.status !== "COMPLETED" || !urlData.output?.upload_url) {
-                throw new Error(urlData.output?.error || "Server refused to generate upload URL");
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || "Failed to upload via proxy");
             }
 
-            const { upload_url, file_key } = urlData.output;
+            const data = await response.json();
 
-            // Step 2 - Upload direct to Cloudflare R2
-            const uploadResponse = await fetch(upload_url, {
-                method: "PUT",
-                body: file,
-                headers: {
-                    "Content-Type": file.type
-                }
-            });
-
-            if (!uploadResponse.ok) {
-                console.error("Upload failed:", await uploadResponse.text());
-                throw new Error("Cloudflare upload failed (Check CORS settings)");
+            if (data.status !== "COMPLETED") {
+                throw new Error(data.error || "Backend failed to process upload");
             }
 
             toast({
-                title: "Voice Uploaded",
-                description: `Voice "${name}" is now saved in Cloudflare R2.`,
+                title: "Voice Saved Successfully",
+                description: `Voice "${name}" is now ready in your cloud library.`,
             });
 
             onSuccess();
@@ -96,13 +99,14 @@ export function AddVoiceDialog({ open, onOpenChange, onSuccess, apiBase }: AddVo
 
             // Clear form
             setName("");
+            setText("");
             setFile(null);
 
         } catch (error: any) {
-            console.error(error);
+            console.error("Proxy Upload Error:", error);
             toast({
                 title: "Upload Failed",
-                description: error.message || "Could not complete the upload.",
+                description: error.message || "Could not complete the proxy upload.",
                 variant: "destructive",
             });
         } finally {
