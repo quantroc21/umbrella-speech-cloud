@@ -42,10 +42,13 @@ try:
     print("--- [DEBUG] Importing Core Libraries... ---", file=sys.stderr, flush=True)
     import base64
     import io
+    import re
+    import random
     import torch
     import numpy as np
     import runpod
     import boto3
+    import soundfile as sf
     from botocore.exceptions import ClientError
 
     
@@ -394,10 +397,6 @@ try:
                     text=ref.get("text")
                 ))
 
-            # --- V10.5 STOCHASTIC PROSODY ENGINE ---
-            import soundfile as sf
-            import re
-            import random
             from tools.server.inference import inference_wrapper
             
             # Seed random for reproducibility if seed provided
@@ -550,7 +549,11 @@ try:
                 else:
                     final_audio = np.concatenate(final_audio_segments).astype(np.float32)
                 
-                sf.write(audio_buffer, final_audio, sample_rate, format='WAV')
+                # Force PCM_16 for 50% smaller transfer size and better compatibility
+                sf.write(audio_buffer, final_audio, sample_rate, format='WAV', subtype='PCM_16')
+                
+                size_kb = audio_buffer.tell() / 1024
+                print(f"--- [v11.2] Final Audio Size: {size_kb:.2f} KB | Duration: {len(final_audio)/sample_rate:.2f}s ---", file=sys.stderr, flush=True)
             else:
                  return {"error": "No audio data generated", "status": "failed"}
 
