@@ -13,20 +13,27 @@ try:
     
     # v8 Module 2: Network Volume Optimization
     # Prioritize Network Volume if available
-    # v12.0: Network Volume (Fish Speech 1.5)
+    # v12.2: Enhanced Debugging for Network Volume
     # The "Brains" are now external to the container
-    FISH_1_5_VOLUME = "/runpod-volume/checkpoints/fish-speech-1.5"
+    VOLUME_PATH = "/runpod-volume"
+    FISH_1_5_VOLUME = os.path.join(VOLUME_PATH, "checkpoints", "fish-speech-1.5")
     
+    print(f"--- [v12.2 DEBUG] Checking Volume Root: {VOLUME_PATH} (Exists: {os.path.exists(VOLUME_PATH)}) ---", file=sys.stderr, flush=True)
+    if os.path.exists(VOLUME_PATH):
+        try:
+             print(f"--- [v12.2 DEBUG] Volume Contents: {os.listdir(VOLUME_PATH)} ---", file=sys.stderr, flush=True)
+        except Exception as e:
+             print(f"--- [v12.2 DEBUG] Failed to list volume: {e} ---", file=sys.stderr, flush=True)
+
     if os.path.exists(FISH_1_5_VOLUME):
         checkpoint_dir = FISH_1_5_VOLUME
-        print(f"--- [v12.0 UPGRADE] Found Fish Speech 1.5 on Volume: {checkpoint_dir} ---", file=sys.stderr, flush=True)
+        print(f"--- [v12.2 UPGRADE] Found Fish Speech 1.5 on Volume: {checkpoint_dir} ---", file=sys.stderr, flush=True)
         # v12: Pre-warm the volume files to RAM
-        print(f"--- [v12.0 INIT] Pre-warming 4GB Model Weights (v1.5)... ---", file=sys.stderr, flush=True)
+        print(f"--- [v12.2 INIT] Pre-warming 4GB Model Weights (v1.5)... ---", file=sys.stderr, flush=True)
     else:
         # Fallback to local (if s1-mini was somehow still baked, or error)
-        # NOTE: In Skeleton image, this might be empty, which is fine, we want to fail fast if volume is missing
         checkpoint_dir = "checkpoints/openaudio-s1-mini"
-        print(f"--- [v12.0 WARNING] Network Volume NOT Found. Fallback to: {checkpoint_dir} ---", file=sys.stderr, flush=True)
+        print(f"--- [v12.2 WARNING] Fish 1.5 NOT Found at {FISH_1_5_VOLUME}. Fallback to: {checkpoint_dir} ---", file=sys.stderr, flush=True)
 
     if not os.path.exists(checkpoint_dir):
         print(f"--- [CRITICAL] Checkpoint dir {checkpoint_dir} MISSING! ---", file=sys.stderr, flush=True)
