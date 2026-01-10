@@ -30,12 +30,10 @@ COPY . .
 # Install dependencies using uv
 RUN uv pip install --system -e .[cu124] pydub boto3
 
-# --- CRITICAL: Download Models at Build Time ---
-# This ensures the models are inside the image, so "Cold Start" doesn't have to download them.
-# We call the NEW linux-specific script to fetch them (skipping windows .exes).
-ARG HF_TOKEN
-ENV HF_TOKEN=${HF_TOKEN}
-RUN python tools/docker_download.py
+# --- v12.0 SKELETON UPDATE: Skip Model Download ---
+# We now load models from Network Volume at Runtime
+# ARG HF_TOKEN (No longer needed for build)
+# RUN python tools/docker_download.py (REMOVED)
 
 # Define the entrypoint
 # -u means unbuffered output (so you see logs immediately)

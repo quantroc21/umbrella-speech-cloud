@@ -13,15 +13,20 @@ try:
     
     # v8 Module 2: Network Volume Optimization
     # Prioritize Network Volume if available
-    NETWORK_VOLUME_PATH = "/runpod-volume/checkpoints/openaudio-s1-mini"
-    LOCAL_CHECKPOINT_PATH = "checkpoints/openaudio-s1-mini"
+    # v12.0: Network Volume (Fish Speech 1.4)
+    # The "Brains" are now external to the container
+    FISH_1_4_VOLUME = "/runpod-volume/checkpoints/fish-speech-1.4"
     
-    if os.path.exists(NETWORK_VOLUME_PATH):
-        checkpoint_dir = NETWORK_VOLUME_PATH
-        print(f"--- [v8 OPTIMIZATION] Using Network Volume: {checkpoint_dir} ---", file=sys.stderr, flush=True)
+    if os.path.exists(FISH_1_4_VOLUME):
+        checkpoint_dir = FISH_1_4_VOLUME
+        print(f"--- [v12.0 UPGRADE] Found Fish Speech 1.4 on Volume: {checkpoint_dir} ---", file=sys.stderr, flush=True)
+        # v12: Pre-warm the volume files to RAM
+        print(f"--- [v12.0 INIT] Pre-warming 4GB Model Weights... ---", file=sys.stderr, flush=True)
     else:
-        checkpoint_dir = LOCAL_CHECKPOINT_PATH
-        print(f"--- [v8 INFO] Using Local Checkpoints: {checkpoint_dir} ---", file=sys.stderr, flush=True)
+        # Fallback to local (if s1-mini was somehow still baked, or error)
+        # NOTE: In Skeleton image, this might be empty, which is fine, we want to fail fast if volume is missing
+        checkpoint_dir = "checkpoints/openaudio-s1-mini"
+        print(f"--- [v12.0 WARNING] Network Volume NOT Found. Fallback to: {checkpoint_dir} ---", file=sys.stderr, flush=True)
 
     if not os.path.exists(checkpoint_dir):
         print(f"--- [CRITICAL] Checkpoint dir {checkpoint_dir} MISSING! ---", file=sys.stderr, flush=True)
