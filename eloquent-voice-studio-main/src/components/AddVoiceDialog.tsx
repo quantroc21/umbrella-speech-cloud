@@ -59,14 +59,15 @@ export function AddVoiceDialog({ open, onOpenChange, onSuccess, apiBase }: AddVo
                 });
 
             const audioB64 = await toBase64(file);
-            const key = "rpa_PLACEHOLDER_FOR_GITHUB"; // SANITIZED_FOR_PUSH
+            // v12.1: Public release
+            const RUNPOD_API_KEY = "rpa_PLACEHOLDER_FOR_GITHUB"; // SANITIZED_FOR_PUSH
 
             // Step 1: Send Proxy Upload request to RunPod
             const response = await fetch(`${apiBase}/api/serverless`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${key}`
+                    "Authorization": `Bearer ${RUNPOD_API_KEY}`
                 },
                 body: JSON.stringify({
                     input: {

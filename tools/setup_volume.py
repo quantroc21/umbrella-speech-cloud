@@ -7,13 +7,13 @@ from huggingface_hub import snapshot_download
 # --- CONFIGURATION ---
 # The Target Volume Path on RunPod (Must match what you mount)
 VOLUME_ROOT = "/runpod-volume" 
-MODEL_DIR = os.path.join(VOLUME_ROOT, "checkpoints", "fish-speech-1.4")
-HF_REPO_ID = "fishaudio/fish-speech-1.4"
+MODEL_DIR = os.path.join(VOLUME_ROOT, "checkpoints", "fish-speech-1.5")
+HF_REPO_ID = "fishaudio/fish-speech-1.5"
 # SECURE: Read from Environment Variable
 HF_TOKEN = os.environ.get("HF_TOKEN")
 
 def setup_volume():
-    print(f"--- [SETUP] Starting Volume Setup for Fish Speech 1.4 ---")
+    print(f"--- [SETUP] Starting Volume Setup for Fish Speech 1.5 ---")
     print(f"--- [SETUP] Target Directory: {MODEL_DIR} ---")
 
     if not HF_TOKEN:

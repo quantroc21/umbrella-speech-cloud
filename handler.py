@@ -13,15 +13,15 @@ try:
     
     # v8 Module 2: Network Volume Optimization
     # Prioritize Network Volume if available
-    # v12.0: Network Volume (Fish Speech 1.4)
+    # v12.0: Network Volume (Fish Speech 1.5)
     # The "Brains" are now external to the container
-    FISH_1_4_VOLUME = "/runpod-volume/checkpoints/fish-speech-1.4"
+    FISH_1_5_VOLUME = "/runpod-volume/checkpoints/fish-speech-1.5"
     
-    if os.path.exists(FISH_1_4_VOLUME):
-        checkpoint_dir = FISH_1_4_VOLUME
-        print(f"--- [v12.0 UPGRADE] Found Fish Speech 1.4 on Volume: {checkpoint_dir} ---", file=sys.stderr, flush=True)
+    if os.path.exists(FISH_1_5_VOLUME):
+        checkpoint_dir = FISH_1_5_VOLUME
+        print(f"--- [v12.0 UPGRADE] Found Fish Speech 1.5 on Volume: {checkpoint_dir} ---", file=sys.stderr, flush=True)
         # v12: Pre-warm the volume files to RAM
-        print(f"--- [v12.0 INIT] Pre-warming 4GB Model Weights... ---", file=sys.stderr, flush=True)
+        print(f"--- [v12.0 INIT] Pre-warming 4GB Model Weights (v1.5)... ---", file=sys.stderr, flush=True)
     else:
         # Fallback to local (if s1-mini was somehow still baked, or error)
         # NOTE: In Skeleton image, this might be empty, which is fine, we want to fail fast if volume is missing

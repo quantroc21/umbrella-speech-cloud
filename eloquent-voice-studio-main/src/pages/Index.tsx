@@ -49,14 +49,14 @@ const Index = () => {
 
   const fetchVoices = async () => {
     try {
-      // v10: Fetch list of uploaded voices from RunPod (which checks R2)
-      const key = ""; // REMOVED_FOR_PUSH
+      // v12.1: Public release (Sanitize before push!)
+      const RUNPOD_API_KEY = "rpa_PLACEHOLDER_FOR_GITHUB";
 
       const response = await fetch(`${API_BASE}/api/serverless`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${key}`
+          'Authorization': `Bearer ${RUNPOD_API_KEY}`
         },
         body: JSON.stringify({
           input: {
@@ -125,14 +125,13 @@ const Index = () => {
       const finalText = selectedEmotion ? `[${selectedEmotion}] ${text}` : text;
 
       // Serverless (RunPod) Request Structure - REMOVED KEY FOR GITHUB PUSH PROTECTION
-      // TODO: Move this to a secure .env file or User Settings UI
-      const key = ""; // REMOVED_FOR_PUSH
-
+      // v12.1: Public release
+      const RUNPOD_API_KEY = "rpa_PLACEHOLDER_FOR_GITHUB";
       const response = await fetch(`${API_BASE}/api/serverless`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${key}`
+          'Authorization': `Bearer ${RUNPOD_API_KEY}`
         },
         body: JSON.stringify({
           input: {

@@ -20,6 +20,8 @@ export default defineConfig({
       "/v1": {
         target: "https://api.runpod.ai/v2/vliov4h1a58iwu/runsync",
         changeOrigin: true,
+        timeout: 600000,
+        proxyTimeout: 600000,
       },
     },
     hmr: {
