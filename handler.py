@@ -123,9 +123,9 @@ try:
         """
         job_id = job.get('id', 'unknown')
         
-        # v12.14: Force Volume Check Logic Moved Here
-        logger.info(f"--- [v12.14 TRACE] Inference Start ---")
-        logger.info(f"--- [v12.14 CHECK] Loaded Model: {LLAMA_CHECKPOINT_PATH} ---")
+        # v12.15: Force Volume Check Logic Moved Here
+        logger.info(f"--- [v12.15 TRACE] Inference Start ---")
+        logger.info(f"--- [v12.15 CHECK] Loaded Model: {LLAMA_CHECKPOINT_PATH} ---")
         
         if "s1-mini" in str(LLAMA_CHECKPOINT_PATH):
              logger.error("--- [CRITICAL] Running on FALLBACK s1-mini model because Network Volume was missing! ---")
@@ -520,7 +520,7 @@ try:
                             chunk_speed = random.uniform(0.80, 0.85)
 
                         # Generate Audio for this chunk
-                        logger.info(f"--- [v12.14 TRACE] Inference Start ---")
+                        logger.info(f"--- [v12.15 TRACE] Inference Start ---")
                         logger.info(f"Speed: {chunk_speed:.2f} | Pause: {pause_duration:.2f}s")
                         logger.info(f"References Count: {len(references)}")
                         if len(references) > 0:

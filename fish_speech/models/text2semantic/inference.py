@@ -314,17 +314,18 @@ def generate(
 
     prefill_decode = decode_one_token_ar
 
-    # v12.13 DEBUG: Trace Input Tensors
+    # v12.15 FIX: Clamp Out-of-Bounds Tokens
     if prompt is not None:
-        logger.info(f"--- [v12.13 DEBUG] Prompt Shape: {prompt.shape} ---")
-        logger.info(f"--- [v12.13 DEBUG] Prompt Min: {prompt.min().item()} | Max: {prompt.max().item()} ---")
+        vocab_size = model.config.vocab_size
+        max_val = prompt.max().item()
         
-        # Check for out-of-bounds tokens
-        # We assume 4096 codebook size or similar? Or 1024?
-        # If any value is > 200000 (vocab size), it's definitely bad.
-        # But for codebooks, it should be small.
-        if prompt.max().item() >= 2000:
-             logger.warning(f"--- [v12.13 WARNING] High Token Value Detected: {prompt.max().item()} ---")
+        logger.info(f"--- [v12.15 CHECK] Prompt Shape: {prompt.shape} | Max Token: {max_val} | Vocab Size: {vocab_size} ---")
+
+        if max_val >= vocab_size:
+            logger.warning(f"--- [v12.15 FIX] CLAMPING {max_val} -> 0 (Exceeds Vocab {vocab_size}) ---")
+            # Replace out-of-bounds tokens with 0 (Padding/UNK)
+            prompt = torch.where(prompt >= vocab_size, torch.tensor(0, device=prompt.device, dtype=prompt.dtype), prompt)
+    
     
     first_token = prefill_decode(
         model,
