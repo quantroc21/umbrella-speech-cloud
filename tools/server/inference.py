@@ -1,4 +1,5 @@
 import traceback
+from loguru import logger
 from http import HTTPStatus
 
 import numpy as np

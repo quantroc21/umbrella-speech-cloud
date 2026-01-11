@@ -19,13 +19,13 @@ try:
     VOLUME_PATH = "/runpod-volume"
     FISH_1_5_VOLUME = os.path.join(VOLUME_PATH, "checkpoints", "fish-speech-1.5")
     
-    print(f"--- [v12.6 DEBUG] Checking Volume Root: {VOLUME_PATH} ---", file=sys.stderr, flush=True)
+    print(f"--- [v12.7 DEBUG] Checking Volume Root: {VOLUME_PATH} ---", file=sys.stderr, flush=True)
 
     if os.path.exists(FISH_1_5_VOLUME):
         checkpoint_dir = FISH_1_5_VOLUME
-        print(f"--- [v12.6 UPGRADE] Volume Status: READY (v1.5) ---", file=sys.stderr, flush=True)
+        print(f"--- [v12.7 UPGRADE] Volume Status: READY (v1.5) ---", file=sys.stderr, flush=True)
         # v12: Pre-warm the volume files to RAM
-        print(f"--- [v12.6 INIT] Pre-warming 4GB Model Weights (v1.5)... ---", file=sys.stderr, flush=True)
+        print(f"--- [v12.7 INIT] Pre-warming 4GB Model Weights (v1.5)... ---", file=sys.stderr, flush=True)
     else:
         # Fallback to local
         checkpoint_dir = "checkpoints/openaudio-s1-mini"
@@ -84,8 +84,8 @@ try:
     DECODER_CONFIG_NAME = "modded_dac_vq"
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-    print(f"--- [v12.6 CONFIG] Llama: {LLAMA_CHECKPOINT_PATH} ---", file=sys.stderr, flush=True)
-    print(f"--- [v12.6 CONFIG] Decoder: {DECODER_CHECKPOINT_PATH} ---", file=sys.stderr, flush=True)
+    print(f"--- [v12.7 CONFIG] Llama: {LLAMA_CHECKPOINT_PATH} ---", file=sys.stderr, flush=True)
+    print(f"--- [v12.7 CONFIG] Decoder: {DECODER_CHECKPOINT_PATH} ---", file=sys.stderr, flush=True)
 
     # --- Initialization (Cold Start) ---
     print(f"--- [COLD START] Loading Models on {DEVICE}... ---", file=sys.stderr, flush=True)
@@ -492,7 +492,7 @@ try:
                             chunk_speed = random.uniform(0.80, 0.85)
 
                         # Generate Audio for this chunk
-                        logger.info(f"--- [v12.6 TRACE] Inference Start ---")
+                        logger.info(f"--- [v12.7 TRACE] Inference Start ---")
                         logger.info(f"Chunk Text: '{current_chunk_text[:50]}...' ({len(current_chunk_text)} chars)")
                         logger.info(f"Speed: {chunk_speed:.2f} | Pause: {pause_duration:.2f}s")
                         logger.info(f"References Count: {len(references)}")

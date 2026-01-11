@@ -171,6 +171,15 @@ class FishTokenizer:
         if special_tokens_path.exists():
             with open(special_tokens_path) as f:
                 all_special_tokens_with_ids = json.load(f)
+            
+            if isinstance(all_special_tokens_with_ids, dict):
+                all_special_tokens_with_ids = list(all_special_tokens_with_ids.keys())
+            
+            # v12.7: Proactively add missing semantic tokens to support full range (4096)
+            existing_tokens = set(all_special_tokens_with_ids)
+            for token in SEMANTIC_TOKENS:
+                if token not in existing_tokens:
+                    all_special_tokens_with_ids.append(token)
         else:
             all_special_tokens_with_ids = ALL_SPECIAL_TOKENS
 
