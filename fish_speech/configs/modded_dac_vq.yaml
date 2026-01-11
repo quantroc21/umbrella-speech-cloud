@@ -1,9 +1,9 @@
 _target_: fish_speech.models.dac.modded_dac.DAC
 # Model setup
 sample_rate: 44100
-encoder_dim: 64
+encoder_dim: 32
 encoder_rates: [2, 4, 8, 8]
-decoder_dim: 1536
+decoder_dim: 768
 decoder_rates: [8, 8, 4, 2]
 encoder_transformer_layers: [0, 0, 0, 4]
 decoder_transformer_layers: [4, 0, 0, 0]
@@ -21,7 +21,7 @@ transformer_general_config:
 # Quantization
 quantizer:
   _target_: fish_speech.models.dac.rvq.DownsampleResidualVectorQuantize
-  input_dim: 1024
+  input_dim: 512
   n_codebooks: 9
   codebook_size: 1024
   codebook_dim: 8
@@ -31,14 +31,14 @@ quantizer:
     _target_: fish_speech.models.dac.modded_dac.WindowLimitedTransformer
     causal: true
     window_size: 128  # empirically this does not seem to matter
-    input_dim: 1024
+    input_dim: 512
     config: &transformer_config
       _target_: fish_speech.models.dac.modded_dac.ModelArgs
       block_size: 4096
       n_layer: 8
-      n_head: 16
-      dim: 1024
-      intermediate_size: 3072
+      n_head: 8
+      dim: 512
+      intermediate_size: 1536
       n_local_heads: -1
       head_dim: 64
       rope_base: 10000
