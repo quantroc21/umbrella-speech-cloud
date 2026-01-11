@@ -286,6 +286,17 @@ class ContentSequence:
         if encoded.vq_parts is not None and len(encoded.vq_parts) > 0:
             vq_parts = encoded.vq_parts
             vq_parts = torch.cat(vq_parts, dim=1)
+            
+            # v12.8: Handle shape mismatch (e.g., 10 vs 8 codebooks)
+            if vq_parts.shape[0] > num_codebooks:
+                logger.warning(f"Truncating vq_parts from {vq_parts.shape[0]} to {num_codebooks} codebooks")
+                vq_parts = vq_parts[:num_codebooks]
+            elif vq_parts.shape[0] < num_codebooks:
+                # Should not happen with current models but for safety
+                padding = torch.zeros((num_codebooks - vq_parts.shape[0], vq_parts.shape[1]), 
+                                      dtype=vq_parts.dtype, device=vq_parts.device)
+                vq_parts = torch.cat([vq_parts, padding], dim=0)
+
             values[0, encoded.vq_mask_tokens] = (
                 vq_parts[0] + tokenizer.semantic_begin_id
             )
