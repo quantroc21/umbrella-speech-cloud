@@ -612,6 +612,20 @@ try:
                     final_audio = np.concatenate(final_audio_segments).astype(np.float32)
                 
                 # Force PCM_16 for 50% smaller transfer size and better compatibility
+            # v12.20 FIX: Force 1D Array (Mono) and Check Sample Rate
+            # 1. Flatten to ensure 1D shape (N,) not (N, 1)
+            if final_audio.ndim > 1:
+                logger.warning(f"--- [v12.20 SHAPE] Audio was {final_audio.shape}, flattening to Mono. ---")
+                final_audio = final_audio.flatten()
+            
+            # 2. Enforce Fish Speech 1.5 Sample Rate (44100 Hz)
+            # If engine didn't report it, or reported something odd, we default to 44100
+            if not sample_rate or sample_rate != 44100:
+                 logger.warning(f"--- [v12.20 RATE] Correcting Sample Rate from {sample_rate} to 44100 Hz ---")
+                 sample_rate = 44100
+            
+            logger.info(f"--- [v12.20 CONFIG] Final Audio: Shape={final_audio.shape}, Rate={sample_rate} Hz ---")
+
             # v12.18 DEBUG: Audio Statistics & Normalization
             # Check for NaNs/Infs
             if np.isnan(final_audio).any() or np.isinf(final_audio).any():
