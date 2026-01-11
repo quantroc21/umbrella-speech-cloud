@@ -13,27 +13,22 @@ try:
     
     # v8 Module 2: Network Volume Optimization
     # Prioritize Network Volume if available
-    # v12.2: Enhanced Debugging for Network Volume
+    # v12.3: Dynamic Model Discovery
     # The "Brains" are now external to the container
     VOLUME_PATH = "/runpod-volume"
     FISH_1_5_VOLUME = os.path.join(VOLUME_PATH, "checkpoints", "fish-speech-1.5")
     
-    print(f"--- [v12.2 DEBUG] Checking Volume Root: {VOLUME_PATH} (Exists: {os.path.exists(VOLUME_PATH)}) ---", file=sys.stderr, flush=True)
-    if os.path.exists(VOLUME_PATH):
-        try:
-             print(f"--- [v12.2 DEBUG] Volume Contents: {os.listdir(VOLUME_PATH)} ---", file=sys.stderr, flush=True)
-        except Exception as e:
-             print(f"--- [v12.2 DEBUG] Failed to list volume: {e} ---", file=sys.stderr, flush=True)
+    print(f"--- [v12.3 DEBUG] Checking Volume Root: {VOLUME_PATH} ---", file=sys.stderr, flush=True)
 
     if os.path.exists(FISH_1_5_VOLUME):
         checkpoint_dir = FISH_1_5_VOLUME
-        print(f"--- [v12.2 UPGRADE] Found Fish Speech 1.5 on Volume: {checkpoint_dir} ---", file=sys.stderr, flush=True)
+        print(f"--- [v12.3 UPGRADE] Volume Status: READY (v1.5) ---", file=sys.stderr, flush=True)
         # v12: Pre-warm the volume files to RAM
-        print(f"--- [v12.2 INIT] Pre-warming 4GB Model Weights (v1.5)... ---", file=sys.stderr, flush=True)
+        print(f"--- [v12.3 INIT] Pre-warming 4GB Model Weights (v1.5)... ---", file=sys.stderr, flush=True)
     else:
-        # Fallback to local (if s1-mini was somehow still baked, or error)
+        # Fallback to local
         checkpoint_dir = "checkpoints/openaudio-s1-mini"
-        print(f"--- [v12.2 WARNING] Fish 1.5 NOT Found at {FISH_1_5_VOLUME}. Fallback to: {checkpoint_dir} ---", file=sys.stderr, flush=True)
+        print(f"--- [v12.3 WARNING] Fish 1.5 NOT Found at {FISH_1_5_VOLUME}. Fallback to: {checkpoint_dir} ---", file=sys.stderr, flush=True)
 
     if not os.path.exists(checkpoint_dir):
         print(f"--- [CRITICAL] Checkpoint dir {checkpoint_dir} MISSING! ---", file=sys.stderr, flush=True)
@@ -70,9 +65,26 @@ try:
 
     # --- Configuration ---
     LLAMA_CHECKPOINT_PATH = checkpoint_dir
-    DECODER_CHECKPOINT_PATH = f"{checkpoint_dir}/codec.pth"
+    
+    # v12.3 Smart Decoder Discovery: 
+    # v1.5 uses firefly-gan-vq-fsq-8x1024-21hz-generator.pth
+    # Legacy uses codec.pth
+    possibilities = [
+        "codec.pth",
+        "firefly-gan-vq-fsq-8x1024-21hz-generator.pth"
+    ]
+    decoder_file = "codec.pth" # Default
+    for p in possibilities:
+        if os.path.exists(os.path.join(checkpoint_dir, p)):
+            decoder_file = p
+            break
+            
+    DECODER_CHECKPOINT_PATH = os.path.join(checkpoint_dir, decoder_file)
     DECODER_CONFIG_NAME = "modded_dac_vq"
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+    print(f"--- [v12.3 CONFIG] Llama: {LLAMA_CHECKPOINT_PATH} ---", file=sys.stderr, flush=True)
+    print(f"--- [v12.3 CONFIG] Decoder: {DECODER_CHECKPOINT_PATH} ---", file=sys.stderr, flush=True)
 
     # --- Initialization (Cold Start) ---
     print(f"--- [COLD START] Loading Models on {DEVICE}... ---", file=sys.stderr, flush=True)
