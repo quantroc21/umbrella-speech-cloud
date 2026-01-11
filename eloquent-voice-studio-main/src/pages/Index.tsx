@@ -161,7 +161,7 @@ const Index = () => {
         for (let i = 0; i < len; i++) {
           bytes[i] = binaryString.charCodeAt(i);
         }
-        const blob = new Blob([bytes.buffer], { type: "audio/wav" });
+        const blob = new Blob([bytes.buffer], { type: "audio/mp3" });
         const url = URL.createObjectURL(blob);
         setAudioUrl(url);
       } else {

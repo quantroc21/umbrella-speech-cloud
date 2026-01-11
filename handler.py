@@ -1,7 +1,12 @@
 import sys
 import traceback
 import os
+import io
+import base64
 from loguru import logger
+import soundfile as sf
+import numpy as np
+from pydub import AudioSegment
 
 # Force unbuffered output for RunPod
 sys.stdout.reconfigure(line_buffering=True)
@@ -568,7 +573,6 @@ try:
                         current_chunk_text += token
                 
                 # Loose end (End of paragraph without punctuation)
-                if current_chunk_text.strip():
                         print(f"--- [PROSODY] Final Chunk (Para): '{current_chunk_text[:15]}...' ---", file=sys.stderr, flush=True)
                         req = ServeTTSRequest(
                             text=current_chunk_text,
@@ -608,26 +612,34 @@ try:
                     final_audio = np.concatenate(final_audio_segments).astype(np.float32)
                 
                 # Force PCM_16 for 50% smaller transfer size and better compatibility
-                sf.write(audio_buffer, final_audio, sample_rate, format='WAV', subtype='PCM_16')
-                
-                size_kb = audio_buffer.tell() / 1024
-                print(f"--- [v11.2] Final Audio Size: {size_kb:.2f} KB | Duration: {len(final_audio)/sample_rate:.2f}s ---", file=sys.stderr, flush=True)
-            else:
-                 return {"error": "No audio data generated", "status": "failed"}
+            # v12.16 FIX: Convert to MP3 to avoid Payload Too Large (400)
+            # 1. Write to WAV buffer (RAM)
+            wav_buffer = io.BytesIO()
+            sf.write(wav_buffer, final_audio, sample_rate, format='WAV')
+            wav_buffer.seek(0)
 
-            audio_buffer.seek(0)
-            data = audio_buffer.read()
-            audio_base64 = base64.b64encode(data).decode("utf-8")
+            # 2. Convert to MP3 using pydub
+            logger.info(f"--- [v12.16 COMPRESS] Converting WAV ({len(wav_buffer.getvalue())/1024/1024:.2f} MB) to MP3... ---")
+            audio_seg = AudioSegment.from_wav(wav_buffer)
             
+            mp3_buffer = io.BytesIO()
+            audio_seg.export(mp3_buffer, format="mp3", bitrate="192k")
+            mp3_bytes = mp3_buffer.getvalue()
+            
+            logger.info(f"--- [v12.16 COMPRESS] Final MP3 Size: {len(mp3_bytes)/1024/1024:.2f} MB ---")
+
+            # 3. Return MP3 Bytes
+            audio_base64 = base64.b64encode(mp3_bytes).decode('utf-8')
+
             # v10.1: Memory Cleanup
-            del final_audio_segments, data, audio_buffer
+            del final_audio_segments, mp3_bytes, mp3_buffer, wav_buffer
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 print(f"--- [v10.1 MEMORY] Cleanup complete. Max VRAM: {torch.cuda.max_memory_allocated() / 1024**2:.2f} MiB ---", file=sys.stderr, flush=True)
 
             return {
                 "audio_base64": audio_base64,
-                "format": "wav",
+                "format": "mp3",
                 "status": "COMPLETED"
             }
         finally:
