@@ -3,6 +3,7 @@ from typing import List, Literal, Union
 
 import numpy as np
 import torch
+from loguru import logger
 
 from fish_speech.tokenizer import (
     IM_END_TOKEN,
