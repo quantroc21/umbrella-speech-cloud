@@ -122,6 +122,18 @@ try:
         RunPod Serverless Handler
         """
         job_id = job.get('id', 'unknown')
+        
+        # v12.12: Force Volume Check Logic Moved Here
+        logger.info(f"--- [v12.12 TRACE] Inference Start ---")
+        logger.info(f"--- [v12.12 CHECK] Loaded Model: {LLAMA_CHECKPOINT_PATH} ---")
+        
+        if "s1-mini" in str(LLAMA_CHECKPOINT_PATH):
+             logger.error("--- [CRITICAL] Running on FALLBACK s1-mini model because Network Volume was missing! ---")
+             logger.error("--- [CRITICAL] This model is incompatible with v12.10+ logic. ---")
+             logger.error("--- [ACTION] Please attach the Network Volume to /runpod-volume ---")
+             # Fail fast to prevent confusing CUDA errors later
+             return {"error": "Network Volume Missing: /runpod-volume/checkpoints/fish-speech-1.5 not found. Please attach Volume."}
+
         print(f"--- [DEBUG] Handling Request: {job_id} ---", file=sys.stderr, flush=True)
         
         try:
@@ -507,17 +519,8 @@ try:
                             # Slow down ONLY at the very end to "land" the thought
                             chunk_speed = random.uniform(0.80, 0.85)
 
-    logger.info(f"--- [v12.11 TRACE] Inference Start ---")
-    logger.info(f"--- [v12.11 CHECK] Loaded Model: {LLAMA_CHECKPOINT_PATH} ---")
-    
-    if "s1-mini" in str(LLAMA_CHECKPOINT_PATH):
-         logger.error("--- [CRITICAL] Running on FALLBACK s1-mini model because Network Volume was missing! ---")
-         logger.error("--- [CRITICAL] This model is incompatible with v12.10+ logic. ---")
-         logger.error("--- [ACTION] Please attach the Network Volume to /runpod-volume ---")
-         # We do not raise immediately to let logs flush, but the crash is inevitable if we proceed.
-         # Actually, let's raise a clean error to avoid CUDA assert.
-         raise RuntimeError("Network Volume Missing: /runpod-volume/checkpoints/fish-speech-1.5 not found. Please attach Volume.")
-                        logger.info(f"Chunk Text: '{current_chunk_text[:50]}...' ({len(current_chunk_text)} chars)")
+                        # Generate Audio for this chunk
+                        logger.info(f"--- [v12.12 TRACE] Inference Start ---")
                         logger.info(f"Speed: {chunk_speed:.2f} | Pause: {pause_duration:.2f}s")
                         logger.info(f"References Count: {len(references)}")
                         if len(references) > 0:
