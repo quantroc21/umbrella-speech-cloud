@@ -17,6 +17,12 @@ export default defineConfig({
         proxyTimeout: 600000,
         rewrite: (path) => path.replace(/^\/api\/serverless/, '')
       },
+      // Status Check Endpoint
+      '/api/status': {
+        target: 'https://api.runpod.ai/v2/vliov4h1a58iwu/status',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/status/, '')
+      },
       "/v1": {
         target: "https://api.runpod.ai/v2/vliov4h1a58iwu/runsync",
         changeOrigin: true,

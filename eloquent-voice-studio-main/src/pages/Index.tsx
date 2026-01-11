@@ -154,19 +154,54 @@ const Index = () => {
       const data = await response.json();
 
       // RunPod returns { status: "COMPLETED", output: { audio_base64: "...", ... } }
-      if (data.status === "COMPLETED" && data.output && data.output.audio_base64) {
-        const binaryString = window.atob(data.output.audio_base64);
+      // OR { status: "IN_QUEUE", id: "..." } if it takes too long
+
+      let finalData = data;
+
+      // Handle Async/Polling if In Queue
+      if (data.status === "IN_QUEUE" || data.status === "IN_PROGRESS") {
+        console.log("Job queued (Long Generation). Polling for status...", data.id);
+        const jobId = data.id;
+
+        // Poll every 3 seconds
+        while (true) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+
+          const statusResponse = await fetch(`${API_BASE}/api/status/${jobId}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${RUNPOD_API_KEY}`
+            }
+          });
+
+          if (!statusResponse.ok) throw new Error("Status check failed");
+
+          finalData = await statusResponse.json();
+          console.log("Polling Status:", finalData.status);
+
+          if (finalData.status === "COMPLETED") {
+            break;
+          } else if (finalData.status === "FAILED") {
+            throw new Error("Job Failed during polling");
+          }
+          // Continue looping if IN_QUEUE or IN_PROGRESS
+        }
+      }
+
+      if (finalData.status === "COMPLETED" && finalData.output && finalData.output.audio_base64) {
+        const binaryString = window.atob(finalData.output.audio_base64);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
         for (let i = 0; i < len; i++) {
           bytes[i] = binaryString.charCodeAt(i);
         }
+        // v12.16: Backend now sends MP3
         const blob = new Blob([bytes.buffer], { type: "audio/mp3" });
         const url = URL.createObjectURL(blob);
         setAudioUrl(url);
       } else {
-        console.error("RunPod Error Detail:", data);
-        const errorMessage = data.error || data.output?.error || "Inference failed";
+        console.error("RunPod Error Detail:", finalData);
+        const errorMessage = finalData.error || finalData.output?.error || "Inference failed";
         throw new Error(errorMessage);
       }
 
