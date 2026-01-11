@@ -612,11 +612,35 @@ try:
                     final_audio = np.concatenate(final_audio_segments).astype(np.float32)
                 
                 # Force PCM_16 for 50% smaller transfer size and better compatibility
-            # v12.16 FIX: Convert to MP3 to avoid Payload Too Large (400)
-            # 1. Write to WAV buffer (RAM)
+            # v12.18 DEBUG: Audio Statistics & Normalization
+            # Check for NaNs/Infs
+            if np.isnan(final_audio).any() or np.isinf(final_audio).any():
+                logger.error("--- [v12.18 ERROR] Audio contains NaN or Inf! Returning Error. ---")
+                return {"error": "Model generated invalid audio (NaN/Inf)", "status": "failed"}
+
+            max_val = np.max(np.abs(final_audio))
+            logger.info(f"--- [v12.18 SAFETY] Audio Stats: Min={np.min(final_audio):.4f}, Max={np.max(final_audio):.4f}, Mean={np.mean(final_audio):.4f} ---")
+
+            # Validate Max Value (Prevent Clipping or Silence)
+            if max_val == 0:
+                 return {"error": "Generated audio is silent", "status": "failed"}
+            
+            # Normalize if needed (safest to always normalize to -3dB or similar, but let's just ensure it's in range)
+            # If max_val > 1.0, we MUST normalize to prevent clipping (buzzing)
+            if max_val > 1.0:
+                logger.info(f"--- [v12.18 NORM] Normalizing audio (Max {max_val:.2f} > 1.0) ---")
+                final_audio = final_audio / max_val
+            
+            # v12.18 FIX: Explicitly convert to Int16 to prevent format interpretation errors
+            # Float32 -> Int16 safely
+            final_audio_int16 = (final_audio * 32767).clip(-32768, 32767).astype(np.int16)
+
+            # 1. Write to WAV buffer (RAM) using explicitly PCM_16
             wav_buffer = io.BytesIO()
-            sf.write(wav_buffer, final_audio, sample_rate, format='WAV')
+            sf.write(wav_buffer, final_audio_int16, sample_rate, format='WAV', subtype='PCM_16')
             wav_buffer.seek(0)
+            
+            logger.info(f"--- [v12.18 FORMAT] Written WAV as PCM_16. Size: {len(wav_buffer.getvalue())/1024:.2f} KB ---")
 
             # 2. Convert to MP3 using pydub
             logger.info(f"--- [v12.16 COMPRESS] Converting WAV ({len(wav_buffer.getvalue())/1024/1024:.2f} MB) to MP3... ---")
