@@ -12,31 +12,47 @@ print("--- [DEBUG] Starting handler script (V2-Safe)... ---", file=sys.stderr, f
 try:
     print("--- [DEBUG] Checking Checkpoints... ---", file=sys.stderr, flush=True)
     
-    # v8 Module 2: Network Volume Optimization
-    # Prioritize Network Volume if available
-    # v12.3: Dynamic Model Discovery
-    # The "Brains" are now external to the container
-    VOLUME_PATH = "/runpod-volume"
-    FISH_1_5_VOLUME = os.path.join(VOLUME_PATH, "checkpoints", "fish-speech-1.5")
+    # v12.10: Dynamic Volume Discovery & Debugging
+    # Search common mount points for the 1.5 model
+    print("--- [v12.10 DEBUG] Searching for Network Volume... ---", file=sys.stderr, flush=True)
     
-    print(f"--- [v12.9 DEBUG] Checking Volume Root: {VOLUME_PATH} ---", file=sys.stderr, flush=True)
+    # List root directory to help find where the volume is
+    try:
+        print(f"--- [v12.10 DEBUG] Root Directory Contents: {os.listdir('/')} ---", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"--- [v12.10 DEBUG] Could not list /: {e} ---", file=sys.stderr, flush=True)
 
-    if os.path.exists(FISH_1_5_VOLUME):
+    possible_mounts = [
+        "/runpod-volume",
+        "/fish-speech-volume", # Name based mount?
+        "/workspace",
+        "/volume",
+        "/data"
+    ]
+    
+    FISH_1_5_VOLUME = None
+    for mount in possible_mounts:
+        check_path = os.path.join(mount, "checkpoints", "fish-speech-1.5")
+        if os.path.exists(check_path):
+            FISH_1_5_VOLUME = check_path
+            print(f"--- [v12.10 FOUND] Found 1.5 Model at: {FISH_1_5_VOLUME} ---", file=sys.stderr, flush=True)
+            break
+        else:
+             print(f"--- [v12.10 SEARCH] Not found at: {check_path} ---", file=sys.stderr, flush=True)
+
+    if FISH_1_5_VOLUME:
         checkpoint_dir = FISH_1_5_VOLUME
-        print(f"--- [v12.9 UPGRADE] Volume Status: READY (v1.5) ---", file=sys.stderr, flush=True)
+        print(f"--- [v12.10 UPGRADE] Volume Status: READY (v1.5) ---", file=sys.stderr, flush=True)
         # v12: Pre-warm the volume files to RAM
-        print(f"--- [v12.9 INIT] Pre-warming 4GB Model Weights (v1.5)... ---", file=sys.stderr, flush=True)
+        print(f"--- [v12.10 INIT] Pre-warming 4GB Model Weights (v1.5)... ---", file=sys.stderr, flush=True)
     else:
         # Fallback to local
         checkpoint_dir = "checkpoints/openaudio-s1-mini"
-        print(f"--- [v12.3 WARNING] Fish 1.5 NOT Found at {FISH_1_5_VOLUME}. Fallback to: {checkpoint_dir} ---", file=sys.stderr, flush=True)
-
-    if not os.path.exists(checkpoint_dir):
-        print(f"--- [CRITICAL] Checkpoint dir {checkpoint_dir} MISSING! ---", file=sys.stderr, flush=True)
-        print(f"--- [DEBUG] Files in /app: {os.listdir('.')} ---", file=sys.stderr, flush=True)
-    else:
-        # v8 Module 2: Pre-warming
-        # specific file touching to trigger page cache impact from network volume
+        print(f"--- [v12.10 WARNING] Fish 1.5 NOT Found! Fallback to: {checkpoint_dir} ---", file=sys.stderr, flush=True)
+        # We will allow fallback for now to see logs, but warn heavily
+        
+    # v8 Module 2: Pre-warming
+    if os.path.exists(checkpoint_dir):
         print(f"--- [v8 PRE-WARM] Touching model files in {checkpoint_dir}... ---", file=sys.stderr, flush=True)
         try:
             for fname in os.listdir(checkpoint_dir):
@@ -84,8 +100,8 @@ try:
     DECODER_CONFIG_NAME = "modded_dac_vq"
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-    print(f"--- [v12.9 CONFIG] Llama: {LLAMA_CHECKPOINT_PATH} ---", file=sys.stderr, flush=True)
-    print(f"--- [v12.9 CONFIG] Decoder: {DECODER_CHECKPOINT_PATH} ---", file=sys.stderr, flush=True)
+    print(f"--- [v12.10 CONFIG] Llama: {LLAMA_CHECKPOINT_PATH} ---", file=sys.stderr, flush=True)
+    print(f"--- [v12.10 CONFIG] Decoder: {DECODER_CHECKPOINT_PATH} ---", file=sys.stderr, flush=True)
 
     # --- Initialization (Cold Start) ---
     print(f"--- [COLD START] Loading Models on {DEVICE}... ---", file=sys.stderr, flush=True)
@@ -492,7 +508,7 @@ try:
                             chunk_speed = random.uniform(0.80, 0.85)
 
                         # Generate Audio for this chunk
-                        logger.info(f"--- [v12.9 TRACE] Inference Start ---")
+                        logger.info(f"--- [v12.10 TRACE] Inference Start ---")
                         logger.info(f"Chunk Text: '{current_chunk_text[:50]}...' ({len(current_chunk_text)} chars)")
                         logger.info(f"Speed: {chunk_speed:.2f} | Pause: {pause_duration:.2f}s")
                         logger.info(f"References Count: {len(references)}")
