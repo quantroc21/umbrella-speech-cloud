@@ -314,6 +314,18 @@ def generate(
 
     prefill_decode = decode_one_token_ar
 
+    # v12.13 DEBUG: Trace Input Tensors
+    if prompt is not None:
+        logger.info(f"--- [v12.13 DEBUG] Prompt Shape: {prompt.shape} ---")
+        logger.info(f"--- [v12.13 DEBUG] Prompt Min: {prompt.min().item()} | Max: {prompt.max().item()} ---")
+        
+        # Check for out-of-bounds tokens
+        # We assume 4096 codebook size or similar? Or 1024?
+        # If any value is > 200000 (vocab size), it's definitely bad.
+        # But for codebooks, it should be small.
+        if prompt.max().item() >= 2000:
+             logger.warning(f"--- [v12.13 WARNING] High Token Value Detected: {prompt.max().item()} ---")
+    
     first_token = prefill_decode(
         model,
         prompt.view(1, codebook_dim, -1),
