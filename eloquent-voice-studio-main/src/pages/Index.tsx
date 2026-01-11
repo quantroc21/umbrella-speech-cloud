@@ -49,7 +49,6 @@ const Index = () => {
 
   const fetchVoices = async () => {
     try {
-      // v12.1: Public release (Sanitize before push!)
       const RUNPOD_API_KEY = "rpa_PLACEHOLDER_FOR_GITHUB";
 
       const response = await fetch(`${API_BASE}/api/serverless`, {
@@ -124,8 +123,6 @@ const Index = () => {
       // Append emotion tag if selected
       const finalText = selectedEmotion ? `[${selectedEmotion}] ${text}` : text;
 
-      // Serverless (RunPod) Request Structure - REMOVED KEY FOR GITHUB PUSH PROTECTION
-      // v12.1: Public release
       const RUNPOD_API_KEY = "rpa_PLACEHOLDER_FOR_GITHUB";
       const response = await fetch(`${API_BASE}/api/serverless`, {
         method: 'POST',

@@ -4,7 +4,7 @@ import sys
 
 # Constants provided by user and restored code
 ENDPOINT_ID = "vliov4h1a58iwu"
-API_KEY = "rpa_PLACEHOLDER_FOR_GITHUB"
+API_KEY = "rpa_PLACEHOLDER"
 URL = f"https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync"
 
 print(f"--- [TEST] Verifying RunPod Connection ---")

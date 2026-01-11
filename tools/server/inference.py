@@ -1,3 +1,4 @@
+import traceback
 from http import HTTPStatus
 
 import numpy as np
@@ -22,9 +23,10 @@ def inference_wrapper(req: ServeTTSRequest, engine: TTSInferenceEngine):
                     yield result.audio[1]
 
             case "error":
+                logger.error(f"Inference error: {result.error}\n{traceback.format_exc()}")
                 raise HTTPException(
                     HTTPStatus.INTERNAL_SERVER_ERROR,
-                    content=str(result.error),
+                    content=str(result.error) + "\n" + traceback.format_exc(),
                 )
 
             case "segment":
