@@ -3,10 +3,10 @@ import traceback
 import os
 import io
 import base64
+import subprocess
 from loguru import logger
 import soundfile as sf
 import numpy as np
-from pydub import AudioSegment
 
 # Force unbuffered output for RunPod
 sys.stdout.reconfigure(line_buffering=True)
@@ -640,23 +640,44 @@ try:
             sf.write(wav_buffer, final_audio_int16, sample_rate, format='WAV', subtype='PCM_16')
             wav_buffer.seek(0)
             
-            logger.info(f"--- [v12.18 FORMAT] Written WAV as PCM_16. Size: {len(wav_buffer.getvalue())/1024:.2f} KB ---")
+            wav_bytes = wav_buffer.getvalue()
+            logger.info(f"--- [v12.19 FORMAT] Written WAV as PCM_16. Size: {len(wav_bytes)/1024:.2f} KB ---")
 
-            # 2. Convert to MP3 using pydub
-            logger.info(f"--- [v12.16 COMPRESS] Converting WAV ({len(wav_buffer.getvalue())/1024/1024:.2f} MB) to MP3... ---")
-            audio_seg = AudioSegment.from_wav(wav_buffer)
+            # 2. Convert to MP3 using DIRECT FFmpeg Pipe (v12.19)
+            # This is more robust than pydub/soundfile for RAW stream handling
+            logger.info(f"--- [v12.19 COMPRESS] Converting WAV to MP3 using Pipe... ---")
             
-            mp3_buffer = io.BytesIO()
-            audio_seg.export(mp3_buffer, format="mp3", bitrate="192k")
-            mp3_bytes = mp3_buffer.getvalue()
-            
-            logger.info(f"--- [v12.16 COMPRESS] Final MP3 Size: {len(mp3_bytes)/1024/1024:.2f} MB ---")
+            try:
+                process = subprocess.Popen(
+                    ["ffmpeg", "-y", "-i", "pipe:0", "-acodec", "libmp3lame", "-b:a", "192k", "-f", "mp3", "pipe:1"],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                
+                # Communicate sends input and waits for output
+                mp3_bytes, stderr_output = process.communicate(input=wav_bytes)
+                
+                if process.returncode != 0:
+                     logger.error(f"--- [v12.19 FFMPEG ERROR] FFmpeg failed: {stderr_output.decode()} ---")
+                     # Fallback to returning WAV if compression fails (better than nothing)
+                     logger.warning("--- [v12.19 FALLBACK] Returning original WAV (Base64) ---")
+                     audio_base64 = base64.b64encode(wav_bytes).decode('utf-8')
+                     return {"audio_base64": audio_base64, "format": "wav", "status": "COMPLETED", "warning": "Compression Failed"}
 
-            # 3. Return MP3 Bytes
-            audio_base64 = base64.b64encode(mp3_bytes).decode('utf-8')
+                logger.info(f"--- [v12.19 COMPRESS] Success! Final MP3 Size: {len(mp3_bytes)/1024/1024:.2f} MB ---")
+                
+                # 3. Return MP3 Bytes
+                audio_base64 = base64.b64encode(mp3_bytes).decode('utf-8')
+
+            except Exception as e:
+                 logger.error(f"--- [v12.19 EXCEPTION] FFmpeg Pipe Failed: {e} ---")
+                 # Fallback
+                 audio_base64 = base64.b64encode(wav_bytes).decode('utf-8')
+                 return {"audio_base64": audio_base64, "format": "wav", "status": "COMPLETED", "warning": "Compression Exception"}
 
             # v10.1: Memory Cleanup
-            del final_audio_segments, mp3_bytes, mp3_buffer, wav_buffer
+            del final_audio_segments, mp3_bytes, wav_buffer, wav_bytes
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 print(f"--- [v10.1 MEMORY] Cleanup complete. Max VRAM: {torch.cuda.max_memory_allocated() / 1024**2:.2f} MiB ---", file=sys.stderr, flush=True)
