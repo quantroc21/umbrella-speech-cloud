@@ -28,7 +28,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 COPY . .
 
 # Install dependencies using uv
-RUN uv pip install --system -e .[cu124] pydub boto3
+RUN uv pip install --system -e .[cu124] pydub boto3 "vector-quantize-pytorch==1.14.24"
 
 # --- v12.0 SKELETON UPDATE: Skip Model Download ---
 # We now load models from Network Volume at Runtime
