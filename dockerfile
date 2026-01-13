@@ -1,51 +1,36 @@
-FROM python:3.12-slim-bookworm AS stage-1
-ARG TARGETARCH
 
-ARG HUGGINGFACE_MODEL=fish-speech-1.5
-ARG HF_ENDPOINT=https://huggingface.co
+# v13.4: Restore User's Optimized "Skeleton" Dockerfile
+# Base Image with Newer PyTorch for compatibility and pre-installed CUDA
+FROM pytorch/pytorch:2.4.1-cuda12.4-cudnn9-runtime
 
-WORKDIR /opt/fish-speech
+# Set working directory
+WORKDIR /app
 
-RUN set -ex \
-    && pip install huggingface_hub \
-    && HF_ENDPOINT=${HF_ENDPOINT} huggingface-cli download --resume-download fishaudio/${HUGGINGFACE_MODEL} --local-dir checkpoints/${HUGGINGFACE_MODEL}
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
 
-FROM python:3.12-slim-bookworm
-ARG TARGETARCH
-
-ARG DEPENDENCIES="  \
+# Install system dependencies (ffmpeg is required for audio)
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libsndfile1 \
     ca-certificates \
-    libsox-dev \
-    build-essential \
-    cmake \
-    libasound-dev \
-    portaudio19-dev \
-    libportaudio2 \
-    libportaudiocpp0 \
-    ffmpeg"
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    set -ex \
-    && rm -f /etc/apt/apt.conf.d/docker-clean \
-    && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' >/etc/apt/apt.conf.d/keep-cache \
-    && apt-get update \
-    && apt-get -y install --no-install-recommends ${DEPENDENCIES} \
-    && echo "no" | dpkg-reconfigure dash
-
-WORKDIR /opt/fish-speech
-
+# Copy the entire project code
 COPY . .
 
-RUN --mount=type=cache,target=/root/.cache,sharing=locked \
-    set -ex \
-    && pip install -e .[stable] \
-    && pip install runpod "vector-quantize-pytorch==1.14.24"
+# Install Python dependencies
+# 1. Install fish-speech package in editable mode
+# 2. Force pinning of vector-quantize-pytorch as verified locally
+# 3. Install RunPod for serverless support
+RUN pip install --no-cache-dir -e .[stable] \
+    && pip install --no-cache-dir runpod "vector-quantize-pytorch==1.14.24"
 
-COPY --from=stage-1 /opt/fish-speech/checkpoints /opt/fish-speech/checkpoints
+# --- v12.0 SKELETON UPDATE: Skip Model Download ---
+# Models are loaded from the Network Volume (mounted to /app/checkpoints) at Runtime.
+# This prevents 127 errors and huge image sizes.
 
-ENV GRADIO_SERVER_NAME="0.0.0.0"
-
-EXPOSE 7860
-
+# Define the entrypoint
+# -u means unbuffered output (so you see logs immediately)
 CMD [ "python", "-u", "handler.py" ]
