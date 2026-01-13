@@ -142,6 +142,12 @@ def preprocess_text(text):
     # Remove remaining bracketed tags to prevent model from reading them
     import re
     text = re.sub(r"\[.*?\]", "", text)
+
+    # NEW: Pause Multiplication (Force longer silences)
+    # 1. Ellipsis to Extra-Long Pause (Double it)
+    text = text.replace("...", "... ...")
+    # 2. Comma to Medium Pause (Add a micro-ellipsis)
+    text = text.replace(", ", ", ... ")
     
     return text.strip()
 
