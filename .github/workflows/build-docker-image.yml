@@ -39,10 +39,10 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            fishaudio/fish-speech:${{ env.version }}
-            fishaudio/fish-speech:latest
+            hoaitroc2212/fish-speech:${{ env.version }}
+            hoaitroc2212/fish-speech:latest
           outputs: type=image,oci-mediatypes=true,compression=zstd,compression-level=3,force-compression=true
-          cache-from: type=registry,ref=fishaudio/fish-speech:latest
+          cache-from: type=registry,ref=hoaitroc2212/fish-speech:latest
           cache-to: type=inline
 
       - name: Build and Push Dev Image
@@ -54,12 +54,12 @@ jobs:
           push: true
           build-args: |
             VERSION=${{ env.version }}
-            BASE_IMAGE=fishaudio/fish-speech:${{ env.version }}
+            BASE_IMAGE=hoaitroc2212/fish-speech:${{ env.version }}
           tags: |
-            fishaudio/fish-speech:${{ env.version }}-dev
-            fishaudio/fish-speech:latest-dev
+            hoaitroc2212/fish-speech:${{ env.version }}-dev
+            hoaitroc2212/fish-speech:latest-dev
           outputs: type=image,oci-mediatypes=true,compression=zstd,compression-level=3,force-compression=true
-          cache-from: type=registry,ref=fishaudio/fish-speech:latest-dev
+          cache-from: type=registry,ref=hoaitroc2212/fish-speech:latest-dev
           cache-to: type=inline
 
       - name: Push README to Dockerhub
@@ -67,4 +67,4 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_USER }}
           password: ${{ secrets.DOCKER_PAT }}
-          repository: fishaudio/fish-speech
+          repository: hoaitroc2212/fish-speech
