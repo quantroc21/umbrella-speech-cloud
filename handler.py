@@ -110,6 +110,41 @@ except Exception as e:
     print(f"CRITICAL: Failed to initialize ModelManager: {e}")
     raise e
 
+def preprocess_text(text):
+    """
+    Handle emotion tags and text normalization before inference.
+    FishSpeech 1.5 picks up cues from punctuation and specific laughter words.
+    """
+    if not text:
+        return text
+        
+    # Handle [laughing] tag
+    if "[laughing]" in text.lower():
+        # Inject realistic laughter words
+        text = text.replace("[laughing]", "hahaha! ")
+        text = text.replace("[Laughing]", "hahaha! ")
+        
+    # Handle [excited] tag
+    if "[excited]" in text.lower():
+        text = text.replace("[excited]", "")
+        text = text.replace("[Excited]", "")
+        # Add exclamation marks to increase model intensity
+        if not text.strip().endswith("!"):
+            text = text.strip() + "!!!"
+            
+    # Handle [whispering] tag
+    if "[whisper]" in text.lower() or "[whispering]" in text.lower():
+        text = text.replace("[whispering]", "")
+        text = text.replace("[whisper]", "")
+        # Add leading ellipses for a softer onset
+        text = "... " + text.strip()
+        
+    # Remove remaining bracketed tags to prevent model from reading them
+    import re
+    text = re.sub(r"\[.*?\]", "", text)
+    
+    return text.strip()
+
 def handler(job):
     """
     RunPod Handler for FishSpeech 1.5
@@ -149,14 +184,18 @@ def handler(job):
     temperature = job_input.get('temperature', 0.7)
     seed = job_input.get('seed', None)
     
+    # NEW: Preprocess text for emotions
+    processed_text = preprocess_text(text)
+    print(f"Original Text: '{text[:30]}...' -> Processed: '{processed_text[:30]}...'")
+
     # NEW: Ensure reference audio is available on this worker
     if reference_id:
         ensure_references(reference_id)
 
-    print(f"Processing TTS: Text='{text[:20]}...', Voice='{reference_id}'")
+    print(f"Processing TTS: Text='{processed_text[:20]}...', Voice='{reference_id}'")
 
     request = ServeTTSRequest(
-        text=text,
+        text=processed_text,
         references=[], 
         reference_id=reference_id,
         max_new_tokens=max_new_tokens,
