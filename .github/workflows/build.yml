@@ -44,13 +44,16 @@ jobs:
         id: vars
         shell: bash
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            version=$(echo "${GITHUB_REF}" | sed 's/refs\/tags\///')
+          echo "Processing Ref: ${GITHUB_REF}"
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            # Extract tag name: refs/tags/v14.8 -> v14.8
+            TAG_NAME=${GITHUB_REF#refs/tags/}
           else
-            version="latest"
+            # Default for branches
+            TAG_NAME="latest"
           fi
-          echo "tag=${version}" >> $GITHUB_OUTPUT
-          echo "Building version: ${version}"
+          echo "Calculated Tag: ${TAG_NAME}"
+          echo "tag=${TAG_NAME}" >> $GITHUB_OUTPUT
 
       - name: Build and push
         uses: docker/build-push-action@v4
