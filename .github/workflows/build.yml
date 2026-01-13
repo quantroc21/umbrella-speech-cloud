@@ -38,20 +38,25 @@ jobs:
 
       - name: Get Version
         id: vars
+        shell: bash
         run: |
           if [[ $GITHUB_REF == refs/tags/v* ]]; then
-            version=$(basename ${GITHUB_REF})
+            version=$(echo ${GITHUB_REF} | sed 's/refs\/tags\///')
           else
-            version=latest
+            version="latest"
           fi
           echo "tag=${version}" >> $GITHUB_OUTPUT
+          echo "Building version: ${version}"
 
       - name: Build and push
         uses: docker/build-push-action@v4
         with:
           context: .
+          file: ./Dockerfile
           push: true
-          tags: hoaitroc2212/fish-speech:${{ steps.vars.outputs.tag }}
+          tags: |
+            hoaitroc2212/fish-speech:${{ steps.vars.outputs.tag }}
+            hoaitroc2212/fish-speech:latest
           build-args: |
              HF_TOKEN=${{ secrets.HF_TOKEN }}
           # Cache to speed up future builds
