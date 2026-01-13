@@ -4,6 +4,8 @@ import io
 import base64
 import torch
 import runpod
+import boto3
+from botocore.config import Config
 from tools.server.model_manager import ModelManager
 from tools.server.inference import inference_wrapper as inference
 from fish_speech.utils.schema import ServeTTSRequest, ServeReferenceAudio
@@ -14,6 +16,22 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 CHECKPOINT_DIR = "checkpoints/fish-speech-1.5"
 REPO_ID = "fishaudio/fish-speech-1.5"
 HF_TOKEN = os.getenv("HF_TOKEN") 
+
+# S3 / R2 Configuration
+S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY")
+S3_SECRET_KEY = os.getenv("S3_SECRET_KEY")
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+S3_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL")
+
+def get_s3_client():
+    return boto3.client(
+        "s3",
+        endpoint_url=S3_ENDPOINT_URL,
+        aws_access_key_id=S3_ACCESS_KEY,
+        aws_secret_access_key=S3_SECRET_KEY,
+        config=Config(signature_version="s3v4"),
+        region_name="auto",
+    )
 
 def ensure_models():
     """Download models if they are missing from the volume."""
@@ -29,6 +47,39 @@ def ensure_models():
     else:
         print(f"Models found in {CHECKPOINT_DIR}. Skipping download.")
 
+def ensure_references(voice_id):
+    """Download reference wav and txt from S3 if missing."""
+    if not voice_id or voice_id in ["default", "none"]:
+        return
+    
+    ref_dir = os.path.join("references", voice_id)
+    os.makedirs(ref_dir, exist_ok=True)
+    
+    # Check if files already exist
+    wav_path = os.path.join(ref_dir, f"{voice_id}.wav")
+    lab_path = os.path.join(ref_dir, f"{voice_id}.lab") # FishSpeech prefers .lab
+    
+    if os.path.exists(wav_path) and os.path.exists(lab_path):
+        return
+
+    print(f"Downloading references for {voice_id} from R2...")
+    try:
+        s3 = get_s3_client()
+        # Download WAV
+        s3.download_file(S3_BUCKET_NAME, f"references/{voice_id}/{voice_id}.wav", wav_path)
+        
+        # Download Text (Try .lab then .txt)
+        try:
+            s3.download_file(S3_BUCKET_NAME, f"references/{voice_id}/{voice_id}.lab", lab_path)
+        except:
+            # Fallback to .txt and rename to .lab locally so inference engine finds it
+            print(f"No .lab found for {voice_id}, trying .txt...")
+            s3.download_file(S3_BUCKET_NAME, f"references/{voice_id}/{voice_id}.txt", lab_path)
+            
+        print(f"References for {voice_id} synced.")
+    except Exception as e:
+        print(f"Failed to sync references for {voice_id}: {e}")
+
 print(f"--- INITIALIZING FISHSPEECH 1.5 SERVERLESS HANDLER ---")
 print(f"Device: {DEVICE}")
 
@@ -37,7 +88,6 @@ try:
     ensure_models()
 except Exception as e:
     print(f"FAILED to download/verify models: {e}")
-    # We continue to let ModelManager try, in case of partial success
 
 # Step 2: Define paths for ModelManager
 DECODER_CHECKPOINT = os.path.join(CHECKPOINT_DIR, "firefly-gan-vq-fsq-8x1024-21hz-generator.pth")
@@ -69,16 +119,25 @@ def handler(job):
     task = job_input.get('task', 'tts')
 
     if task == "list_voices":
-        print("Handling list_voices task...")
-        # Return the same preset list the frontend uses + any dynamic ones
-        return [
-            { "id": "Donal Trump", "name": "Donald Trump", "description": "Cloud Voice" },
-            { "id": "Brian", "name": "Brian", "description": "Cloud Voice" },
-            { "id": "Mark", "name": "Mark", "description": "Cloud Voice" },
-            { "id": "Adame", "name": "Adam", "description": "Cloud Voice" },
-            { "id": "andreas", "name": "Andreas", "description": "Cloud Voice" },
-            { "id": "trump", "name": "Trump (Alt)", "description": "Cloud Voice" },
-        ]
+        print("Dynamically listing voices from R2...")
+        try:
+            s3 = get_s3_client()
+            response = s3.list_objects_v2(Bucket=S3_BUCKET_NAME, Prefix="references/", Delimiter="/")
+            voices = []
+            if 'CommonPrefixes' in response:
+                for prefix in response['CommonPrefixes']:
+                    voice_name = prefix['Prefix'].split('/')[-2]
+                    voices.append({
+                        "id": voice_name,
+                        "name": voice_name,
+                        "description": "Cloud Voice (R2)"
+                    })
+            return voices
+        except Exception as e:
+            print(f"Error listing voices: {e}")
+            return [
+                { "id": "Donal Trump", "name": "Donald Trump", "description": "Cloud Voice (Local)" },
+            ]
     
     # Default TTS Task
     text = job_input.get('text', '')
@@ -90,6 +149,10 @@ def handler(job):
     temperature = job_input.get('temperature', 0.7)
     seed = job_input.get('seed', None)
     
+    # NEW: Ensure reference audio is available on this worker
+    if reference_id:
+        ensure_references(reference_id)
+
     print(f"Processing TTS: Text='{text[:20]}...', Voice='{reference_id}'")
 
     request = ServeTTSRequest(
@@ -117,7 +180,6 @@ def handler(job):
         
         audio_base64 = base64.b64encode(wav_bytes).decode('utf-8')
         
-        # Flatter response for RunPod: RunPod wraps this in its own 'output' field
         return {
             "status": "success",
             "audio_base64": audio_base64
@@ -125,6 +187,6 @@ def handler(job):
         
     except Exception as e:
         print(f"Inference Error: {e}")
-        return {"error": str(e)}
+        return {"status": "error", "error": str(e)}
 
 runpod.serverless.start({"handler": handler})
