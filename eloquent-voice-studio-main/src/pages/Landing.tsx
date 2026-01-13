@@ -261,7 +261,7 @@ const Landing = () => {
                           </button>
                           <audio
                             ref={elevenAudioRef}
-                            src="/voices/comparison-elephantfat.mp3"
+                            src="/voices/ElevenLabs.mp3"
                             onEnded={() => setPlayingPlayer(null)}
                           />
                         </div>
@@ -316,7 +316,7 @@ const Landing = () => {
                           </button>
                           <audio
                             ref={elephantAudioRef}
-                            src="/voices/comparison-elevenlabs.wav"
+                            src="/voices/elephantfat.wav"
                             onEnded={() => setPlayingPlayer(null)}
                           />
                         </div>
