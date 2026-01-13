@@ -63,9 +63,24 @@ except Exception as e:
 def handler(job):
     """
     RunPod Handler for FishSpeech 1.5
+    Supports: task="tts" and task="list_voices"
     """
     job_input = job['input']
+    task = job_input.get('task', 'tts')
+
+    if task == "list_voices":
+        print("Handling list_voices task...")
+        # Return the same preset list the frontend uses + any dynamic ones
+        return [
+            { "id": "Donal Trump", "name": "Donald Trump", "description": "Cloud Voice" },
+            { "id": "Brian", "name": "Brian", "description": "Cloud Voice" },
+            { "id": "Mark", "name": "Mark", "description": "Cloud Voice" },
+            { "id": "Adame", "name": "Adam", "description": "Cloud Voice" },
+            { "id": "andreas", "name": "Andreas", "description": "Cloud Voice" },
+            { "id": "trump", "name": "Trump (Alt)", "description": "Cloud Voice" },
+        ]
     
+    # Default TTS Task
     text = job_input.get('text', '')
     reference_id = job_input.get('reference_id', None)
     chunk_length = job_input.get('chunk_length', 200) 
@@ -75,7 +90,7 @@ def handler(job):
     temperature = job_input.get('temperature', 0.7)
     seed = job_input.get('seed', None)
     
-    print(f"Processing Request: Text='{text[:20]}...', Voice='{reference_id}'")
+    print(f"Processing TTS: Text='{text[:20]}...', Voice='{reference_id}'")
 
     request = ServeTTSRequest(
         text=text,
@@ -102,11 +117,10 @@ def handler(job):
         
         audio_base64 = base64.b64encode(wav_bytes).decode('utf-8')
         
+        # Flatter response for RunPod: RunPod wraps this in its own 'output' field
         return {
-            "status": "COMPLETED",
-            "output": {
-                "audio_base64": audio_base64
-            }
+            "status": "success",
+            "audio_base64": audio_base64
         }
         
     except Exception as e:

@@ -10,17 +10,23 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api/serverless': {
-        target: 'https://api.runpod.ai/v2/vliov4h1a58iwu/runsync',
+        target: 'https://api.runpod.ai/v2/vliov4h1a58iwu',
         changeOrigin: true,
         timeout: 600000,
         proxyTimeout: 600000,
-        rewrite: (path) => path.replace(/^\/api\/serverless/, '')
+        rewrite: (path) => path.replace(/^\/api\/serverless/, '/run') // Default to async /run
       },
-      // Status Check Endpoint
-      '/api/status': {
-        target: 'https://api.runpod.ai/v2/vliov4h1a58iwu/status',
+      '/api/runsync': {
+        target: 'https://api.runpod.ai/v2/vliov4h1a58iwu',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/status/, '')
+        timeout: 600000,
+        proxyTimeout: 600000,
+        rewrite: (path) => path.replace(/^\/api\/runsync/, '/runsync')
+      },
+      '/api/status': {
+        target: 'https://api.runpod.ai/v2/vliov4h1a58iwu',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/status/, '/status')
       },
       "/v1": {
         target: "https://api.runpod.ai/v2/vliov4h1a58iwu/runsync",
