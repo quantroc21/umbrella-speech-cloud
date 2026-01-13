@@ -32,3 +32,6 @@ asr-label*
 /.gradio
 *log
 project_src.zip
+**/.env
+**/.env.*
+*.key

@@ -58,6 +58,38 @@ export function AudioPlayer({ audioUrl, isGenerating }: AudioPlayerProps) {
     return { height, isActive };
   });
 
+  const handleDownload = () => {
+    if (!audioUrl) return;
+    const link = document.createElement("a");
+    link.href = audioUrl;
+    link.download = `elephantfat-voice-${Date.now()}.wav`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleShare = async () => {
+    if (!audioUrl) return;
+    try {
+      const response = await fetch(audioUrl);
+      const blob = await response.blob();
+      const file = new File([blob], "voice-gen.wav", { type: "audio/wav" });
+
+      if (navigator.share) {
+        await navigator.share({
+          files: [file],
+          title: 'ElephantFat AI Voice',
+          text: 'Check out this AI voice generation from ElephantFat',
+        });
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        alert("Link copied to clipboard!");
+      }
+    } catch (err) {
+      console.error("Error sharing:", err);
+    }
+  };
+
   return (
     <div className="bg-card rounded-xl border border-border p-6 space-y-4">
       <audio
@@ -151,10 +183,22 @@ export function AudioPlayer({ audioUrl, isGenerating }: AudioPlayerProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground"
+            onClick={handleDownload}
+            disabled={!audioUrl}
+          >
             <Download className="w-5 h-5" />
           </Button>
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground"
+            onClick={handleShare}
+            disabled={!audioUrl}
+          >
             <Share2 className="w-5 h-5" />
           </Button>
         </div>

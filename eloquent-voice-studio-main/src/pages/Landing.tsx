@@ -40,7 +40,7 @@ const VoiceCard = ({ voice, index }: { voice: typeof featuredVoices[0]; index: n
       if (isPlaying) {
         audioRef.current.pause();
       } else {
-        audioRef.current.play().catch(() => {});
+        audioRef.current.play().catch(() => { });
       }
       setIsPlaying(!isPlaying);
     }
@@ -48,7 +48,7 @@ const VoiceCard = ({ voice, index }: { voice: typeof featuredVoices[0]; index: n
 
   return (
     <AnimatedSection animation="fade-up" delay={index * 80}>
-      <div 
+      <div
         className="group relative bg-card border border-border rounded-xl p-6 hover:border-primary/40 hover:bg-card/80 transition-all duration-300 cursor-pointer"
         onClick={togglePlay}
       >
@@ -64,11 +64,10 @@ const VoiceCard = ({ voice, index }: { voice: typeof featuredVoices[0]; index: n
             <p className="text-sm text-muted-foreground">{voice.description}</p>
           </div>
           <button
-            className={`shrink-0 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
-              isPlaying 
-                ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25" 
-                : "bg-secondary text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"
-            }`}
+            className={`shrink-0 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${isPlaying
+              ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
+              : "bg-secondary text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"
+              }`}
           >
             {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
           </button>
@@ -96,12 +95,29 @@ const FeatureCard = ({ feature, index }: { feature: typeof features[0]; index: n
 
 const Landing = () => {
   const [playingPlayer, setPlayingPlayer] = useState<'elephantfat' | 'elevenlabs' | null>(null);
+  const elephantAudioRef = useRef<HTMLAudioElement>(null);
+  const elevenAudioRef = useRef<HTMLAudioElement>(null);
 
   const handlePlayToggle = (player: 'elephantfat' | 'elevenlabs') => {
-    if (playingPlayer === player) {
-      setPlayingPlayer(null);
+    // Stop other audios first
+    if (player === 'elephantfat') {
+      elevenAudioRef.current?.pause();
+      if (playingPlayer === 'elephantfat') {
+        elephantAudioRef.current?.pause();
+        setPlayingPlayer(null);
+      } else {
+        elephantAudioRef.current?.play().catch(() => { });
+        setPlayingPlayer('elephantfat');
+      }
     } else {
-      setPlayingPlayer(player);
+      elephantAudioRef.current?.pause();
+      if (playingPlayer === 'elevenlabs') {
+        elevenAudioRef.current?.pause();
+        setPlayingPlayer(null);
+      } else {
+        elevenAudioRef.current?.play().catch(() => { });
+        setPlayingPlayer('elevenlabs');
+      }
     }
   };
 
@@ -127,7 +143,7 @@ const Landing = () => {
                   <span className="text-sm text-primary font-medium tracking-wide">From Editor, For Editor</span>
                 </div>
               </AnimatedSection>
-              
+
               <AnimatedSection animation="fade-up" delay={100}>
                 <h1 className="text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-6 tracking-tight leading-[1.1]">
                   <span className="text-foreground">Premium AI Voiceover</span>
@@ -135,14 +151,14 @@ const Landing = () => {
                   <span className="text-gradient">Fixed Price $6</span>
                 </h1>
               </AnimatedSection>
-              
+
               <AnimatedSection animation="fade-up" delay={200}>
                 <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-xl mx-auto lg:mx-0 leading-relaxed">
                   Chất lượng giọng đọc ElevenLabs, giá cố định cho Editor Việt Nam.
                   Không subscription trap. Không phí ẩn.
                 </p>
               </AnimatedSection>
-              
+
               <AnimatedSection animation="fade-up" delay={300}>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                   <Link to="/studio">
@@ -182,11 +198,11 @@ const Landing = () => {
               <div className="relative">
                 {/* Glow effect behind card */}
                 <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-3xl scale-110 opacity-40" />
-                
+
                 {/* Decorative elements */}
                 <div className="absolute -top-4 -right-4 w-24 h-24 border border-primary/20 rounded-full opacity-50" />
                 <div className="absolute -bottom-6 -left-6 w-32 h-32 border border-primary/10 rounded-full opacity-30" />
-                
+
                 <Card className="relative bg-card/90 backdrop-blur-sm border-border overflow-hidden">
                   {/* Badge */}
                   <div className="absolute -top-1 -right-1 z-10">
@@ -194,21 +210,20 @@ const Landing = () => {
                       95% Identical
                     </div>
                   </div>
-                  
+
                   <CardContent className="p-6 lg:p-8">
                     <div className="text-center mb-6">
                       <h3 className="font-bold text-foreground text-xl mb-1">Nghe và Tự Cảm Nhận</h3>
                       <p className="text-sm text-muted-foreground">So sánh chất lượng ElephantFat vs. ElevenLabs</p>
                     </div>
-                    
+
                     {/* Comparison Players */}
                     <div className="space-y-4">
                       {/* ElevenLabs Player */}
-                      <div className={`relative rounded-xl border p-4 transition-all duration-300 ${
-                        playingPlayer === 'elevenlabs' 
-                          ? 'border-muted-foreground/40 bg-secondary/50' 
-                          : 'border-border bg-secondary/30 hover:border-border/80'
-                      }`}>
+                      <div className={`relative rounded-xl border p-4 transition-all duration-300 ${playingPlayer === 'elevenlabs'
+                        ? 'border-muted-foreground/40 bg-secondary/50'
+                        : 'border-border bg-secondary/30 hover:border-border/80'
+                        }`}>
                         <div className="flex items-center justify-between gap-4">
                           <div className="flex items-center gap-3 flex-1">
                             <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
@@ -219,49 +234,51 @@ const Landing = () => {
                               <p className="text-xs text-muted-foreground/70">$22/tháng Plan</p>
                             </div>
                           </div>
-                          
+
                           {/* Waveform */}
                           <div className="flex-1 h-10 flex items-center justify-center gap-[2px]">
                             {Array.from({ length: 24 }).map((_, i) => (
-                              <div 
+                              <div
                                 key={i}
-                                className={`w-1 bg-muted-foreground/40 rounded-full transition-all duration-300 ${
-                                  playingPlayer === 'elevenlabs' ? 'waveform-bar' : ''
-                                }`}
-                                style={{ 
+                                className={`w-1 bg-muted-foreground/40 rounded-full transition-all duration-300 ${playingPlayer === 'elevenlabs' ? 'waveform-bar' : ''
+                                  }`}
+                                style={{
                                   height: `${Math.random() * 60 + 20}%`,
                                   animationDelay: `${i * 50}ms`
                                 }}
                               />
                             ))}
                           </div>
-                          
-                          <button 
+
+                          <button
                             onClick={() => handlePlayToggle('elevenlabs')}
-                            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shrink-0 ${
-                              playingPlayer === 'elevenlabs'
-                                ? 'bg-muted-foreground text-background shadow-md' 
-                                : 'bg-muted text-muted-foreground hover:bg-muted-foreground/20'
-                            }`}
+                            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shrink-0 ${playingPlayer === 'elevenlabs'
+                              ? 'bg-muted-foreground text-background shadow-md'
+                              : 'bg-muted text-muted-foreground hover:bg-muted-foreground/20'
+                              }`}
                           >
                             {playingPlayer === 'elevenlabs' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
                           </button>
+                          <audio
+                            ref={elevenAudioRef}
+                            src="/voices/comparison-elephantfat.mp3"
+                            onEnded={() => setPlayingPlayer(null)}
+                          />
                         </div>
                       </div>
-                      
+
                       {/* VS Divider */}
                       <div className="flex items-center gap-3">
                         <div className="flex-1 h-px bg-border" />
                         <span className="text-xs font-bold text-muted-foreground px-2">VS</span>
                         <div className="flex-1 h-px bg-border" />
                       </div>
-                      
+
                       {/* ElephantFat Player */}
-                      <div className={`relative rounded-xl border p-4 transition-all duration-300 ${
-                        playingPlayer === 'elephantfat' 
-                          ? 'border-primary bg-primary/10 shadow-lg shadow-primary/10' 
-                          : 'border-primary/30 bg-primary/5 hover:border-primary/50'
-                      }`}>
+                      <div className={`relative rounded-xl border p-4 transition-all duration-300 ${playingPlayer === 'elephantfat'
+                        ? 'border-primary bg-primary/10 shadow-lg shadow-primary/10'
+                        : 'border-primary/30 bg-primary/5 hover:border-primary/50'
+                        }`}>
                         <div className="flex items-center justify-between gap-4">
                           <div className="flex items-center gap-3 flex-1">
                             <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
@@ -272,37 +289,40 @@ const Landing = () => {
                               <p className="text-xs text-primary/70">$6 Fixed Price</p>
                             </div>
                           </div>
-                          
+
                           {/* Waveform */}
                           <div className="flex-1 h-10 flex items-center justify-center gap-[2px]">
                             {Array.from({ length: 24 }).map((_, i) => (
-                              <div 
+                              <div
                                 key={i}
-                                className={`w-1 bg-primary/50 rounded-full transition-all duration-300 ${
-                                  playingPlayer === 'elephantfat' ? 'waveform-bar' : ''
-                                }`}
-                                style={{ 
+                                className={`w-1 bg-primary/50 rounded-full transition-all duration-300 ${playingPlayer === 'elephantfat' ? 'waveform-bar' : ''
+                                  }`}
+                                style={{
                                   height: `${Math.random() * 60 + 20}%`,
                                   animationDelay: `${i * 50}ms`
                                 }}
                               />
                             ))}
                           </div>
-                          
-                          <button 
+
+                          <button
                             onClick={() => handlePlayToggle('elephantfat')}
-                            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shrink-0 ${
-                              playingPlayer === 'elephantfat'
-                                ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30' 
-                                : 'bg-primary/20 text-primary hover:bg-primary/30'
-                            }`}
+                            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shrink-0 ${playingPlayer === 'elephantfat'
+                              ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30'
+                              : 'bg-primary/20 text-primary hover:bg-primary/30'
+                              }`}
                           >
                             {playingPlayer === 'elephantfat' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
                           </button>
+                          <audio
+                            ref={elephantAudioRef}
+                            src="/voices/comparison-elevenlabs.wav"
+                            onEnded={() => setPlayingPlayer(null)}
+                          />
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* Voice Info */}
                     <div className="mt-6 pt-4 border-t border-border flex items-center justify-center gap-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-2">
@@ -332,7 +352,7 @@ const Landing = () => {
               Từ đội ngũ Editor, thiết kế cho Editor
             </p>
           </AnimatedSection>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((feature, index) => (
               <FeatureCard key={index} feature={feature} index={index} />
@@ -353,7 +373,7 @@ const Landing = () => {
               Tại sao hàng trăm Editor Việt Nam đã chuyển sang ElephantFat?
             </p>
           </AnimatedSection>
-          
+
           <AnimatedSection animation="scale-in" delay={200}>
             <div className="bg-card rounded-2xl border border-border overflow-hidden">
               <div className="overflow-x-auto">
@@ -383,11 +403,10 @@ const Landing = () => {
                   </thead>
                   <tbody>
                     {comparisonData.map((row, index) => (
-                      <tr 
-                        key={index} 
-                        className={`border-b border-border/50 transition-colors ${
-                          index === comparisonData.length - 1 ? 'bg-primary/5' : 'hover:bg-secondary/30'
-                        }`}
+                      <tr
+                        key={index}
+                        className={`border-b border-border/50 transition-colors ${index === comparisonData.length - 1 ? 'bg-primary/5' : 'hover:bg-secondary/30'
+                          }`}
                       >
                         <td className="p-6 text-foreground font-semibold text-base">{row.feature}</td>
                         <td className="p-6 text-center">
@@ -407,11 +426,10 @@ const Landing = () => {
                           </div>
                         </td>
                         <td className="p-6 text-center">
-                          <span className={`inline-flex px-3 py-1.5 rounded-full text-sm font-medium ${
-                            row.elephantfatWin 
-                              ? 'bg-green-500/10 text-green-500 border border-green-500/20' 
-                              : 'bg-secondary text-muted-foreground'
-                          }`}>
+                          <span className={`inline-flex px-3 py-1.5 rounded-full text-sm font-medium ${row.elephantfatWin
+                            ? 'bg-green-500/10 text-green-500 border border-green-500/20'
+                            : 'bg-secondary text-muted-foreground'
+                            }`}>
                             {row.benefit}
                           </span>
                         </td>
@@ -421,7 +439,7 @@ const Landing = () => {
                 </table>
               </div>
             </div>
-            
+
             <div className="mt-8 p-6 rounded-2xl bg-primary/5 border border-primary/20 flex flex-col md:flex-row items-center justify-between gap-4">
               <p className="text-lg">
                 <span className="text-muted-foreground">Kết luận:</span>{" "}
@@ -452,13 +470,13 @@ const Landing = () => {
               Truy cập đầy đủ bộ sưu tập giọng đọc AI chuyên nghiệp, đa ngôn ngữ
             </p>
           </AnimatedSection>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {featuredVoices.map((voice, index) => (
               <VoiceCard key={voice.id} voice={voice} index={index} />
             ))}
           </div>
-          
+
           <AnimatedSection animation="fade-up" delay={600} className="text-center mt-12">
             <Link to="/studio">
               <Button variant="outline" size="lg" className="h-12 px-8">
@@ -479,7 +497,7 @@ const Landing = () => {
               Lời Ngỏ Từ Đội Ngũ Phát Triển ElephantFat
             </h2>
           </AnimatedSection>
-          
+
           <AnimatedSection animation="scale-in" delay={200}>
             <Card className="bg-card border-border overflow-hidden">
               <CardContent className="p-0">
@@ -496,7 +514,7 @@ const Landing = () => {
                       <span className="font-medium">Proudly Made in Vietnam</span>
                     </div>
                   </div>
-                  
+
                   {/* Letter Content */}
                   <div className="lg:col-span-2 p-8 lg:p-12 flex flex-col justify-center">
                     <blockquote className="text-lg md:text-xl text-foreground leading-relaxed mb-8">
@@ -506,7 +524,7 @@ const Landing = () => {
                       <br /><br />
                       ElephantFat ra đời để xóa bỏ rào cản đó. Với mức giá cố định <span className="text-primary font-semibold">150.000 VNĐ</span>, anh em có ngay <span className="text-primary font-semibold">200.000 ký tự</span> (gấp đôi ElevenLabs) để thoải mái sáng tạo mà không lo về giá hay bẫy gia hạn."
                     </blockquote>
-                    
+
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-6 border-t border-border">
                       <div className="flex items-center gap-3">
                         <span className="text-2xl">🤝</span>
@@ -579,7 +597,7 @@ const Landing = () => {
               <span>© 2024 ElephantFat</span>
             </div>
           </div>
-          
+
           {/* Payment Methods */}
           <div className="mt-8 pt-8 border-t border-border">
             <div className="flex flex-col md:flex-row items-center justify-center gap-6">
