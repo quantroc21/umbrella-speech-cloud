@@ -39,7 +39,8 @@ COPY . .
 
 RUN --mount=type=cache,target=/root/.cache,sharing=locked \
     set -ex \
-    && pip install -e .[stable]
+    && pip install -e .[stable] \
+    && pip install runpod "vector-quantize-pytorch==1.14.24"
 
 COPY --from=stage-1 /opt/fish-speech/checkpoints /opt/fish-speech/checkpoints
 
@@ -47,4 +48,4 @@ ENV GRADIO_SERVER_NAME="0.0.0.0"
 
 EXPOSE 7860
 
-CMD ["./entrypoint.sh"]
+CMD [ "python", "-u", "handler.py" ]

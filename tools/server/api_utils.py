@@ -27,7 +27,7 @@ def parse_args():
     )
     parser.add_argument("--decoder-config-name", type=str, default="firefly_gan_vq")
     parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--half", action="store_true")
+    parser.add_argument("--half", action="store_true", default=True)
     parser.add_argument("--compile", action="store_true")
     parser.add_argument("--max-text-length", type=int, default=0)
     parser.add_argument("--listen", type=str, default="127.0.0.1:8080")
