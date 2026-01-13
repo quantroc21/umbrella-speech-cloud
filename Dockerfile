@@ -31,10 +31,10 @@ COPY . .
 
 # Install Python dependencies using UV
 # 1. Install build-time requirements first
-# 2. Install the project in non-editable mode (skip torch/torchaudio re-install)
+# 2. Install the project WITHOUT the [stable] extra to preserve base image Torch
 # 3. Explicitly include runpod and the vq-pytorch fix
 RUN uv pip install --system --no-cache setuptools setuptools-scm wheel \
-    && uv pip install --system --no-cache --no-deps . \
+    && uv pip install --system --no-cache . \
     && uv pip install --system --no-cache runpod "vector-quantize-pytorch==1.14.24" soundfile huggingface-hub boto3
 
 # Final check for permissions (optional but safe)
