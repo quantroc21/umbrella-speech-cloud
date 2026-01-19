@@ -37,6 +37,9 @@ RUN uv pip install --system --no-cache setuptools setuptools-scm wheel \
     && uv pip install --system --no-cache . \
     && uv pip install --system --no-cache runpod "vector-quantize-pytorch==1.14.24" soundfile huggingface-hub boto3
 
+# Pre-download models to bake them into the image (Fast Cold Start)
+RUN python tools/download_models.py
+
 # Final check for permissions (optional but safe)
 RUN chmod +x entrypoint.sh || true
 

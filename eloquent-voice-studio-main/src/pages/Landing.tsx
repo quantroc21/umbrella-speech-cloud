@@ -4,14 +4,15 @@ import { Play, Pause, Check, ArrowRight, Zap, Volume2, Mic, Headphones, Globe, S
 import { useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import { AnimatedSection } from "@/components/AnimatedSection";
+import { SparklesText } from "@/components/magicui/SparklesText";
 
 const featuredVoices = [
-  { id: 1, name: "Roger", description: "Male · Confident, authoritative", accent: "American", flag: "🇺🇸", audioUrl: "/voices/roger.mp3" },
-  { id: 2, name: "Sarah", description: "Female · Warm, professional", accent: "American", flag: "🇺🇸", audioUrl: "/voices/sarah.mp3" },
-  { id: 3, name: "Charlie", description: "Male · Friendly, conversational", accent: "Australian", flag: "🇦🇺", audioUrl: "/voices/charlie.mp3" },
-  { id: 4, name: "Laura", description: "Female · Clear, articulate", accent: "American", flag: "🇺🇸", audioUrl: "/voices/laura.mp3" },
-  { id: 5, name: "George", description: "Male · Deep, narrative", accent: "British", flag: "🇬🇧", audioUrl: "/voices/george.mp3" },
-  { id: 6, name: "Lily", description: "Female · Youthful, energetic", accent: "British", flag: "🇬🇧", audioUrl: "/voices/lily.mp3" },
+  { id: 1, name: "Donald Trump", description: "Male · Deep, Authoritative", accent: "American", flag: "🇺🇸", audioUrl: "/voices/trump.mp3" },
+  { id: 2, name: "Brian", description: "Male · Standard Text-to-Speech", accent: "American", flag: "🇺🇸", audioUrl: "/voices/brian.mp3" },
+  { id: 3, name: "Mark", description: "Male · High quality speech", accent: "American", flag: "🇺🇸", audioUrl: "/voices/mark.mp3" },
+  { id: 4, name: "Adame", description: "Male · Deep, Narrator", accent: "American", flag: "🇺🇸", audioUrl: "/voices/adame.mp3" },
+  { id: 5, name: "Clyde", description: "Male · Distinctive Voice", accent: "American", flag: "🇺🇸", audioUrl: "/voices/clyde.mp3" },
+  { id: 6, name: "Jessica", description: "Female · Soft, Clear", accent: "American", flag: "🇺🇸", audioUrl: "/voices/jessica.mp3" },
 ];
 
 const comparisonData = [
@@ -463,8 +464,13 @@ const Landing = () => {
         <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
           <AnimatedSection animation="fade-up" className="text-center mb-14">
             <p className="text-sm font-medium text-primary mb-3 tracking-wide uppercase">Voice Library</p>
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 tracking-tight">
-              Thư viện giọng đọc chuyên nghiệp
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 tracking-tight flex flex-wrap items-center justify-center gap-x-3">
+              20+ Giọng đọc chuẩn từ{" "}
+              <SparklesText
+                text="ElevenLabs"
+                className="text-3xl md:text-4xl lg:text-5xl font-bold text-primary"
+                colors={{ first: "#9E7AFF", second: "#FE8BBB" }}
+              />
             </h2>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
               Truy cập đầy đủ bộ sưu tập giọng đọc AI chuyên nghiệp, đa ngôn ngữ
@@ -488,62 +494,6 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Founder's Letter - Full Width Card */}
-      <section className="py-20 md:py-28 bg-secondary/20 relative">
-        <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
-          <AnimatedSection animation="fade-up" className="text-center mb-12">
-            <p className="text-sm font-medium text-primary mb-3 tracking-wide uppercase">Lời ngỏ</p>
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight">
-              Lời Ngỏ Từ Đội Ngũ Phát Triển ElephantFat
-            </h2>
-          </AnimatedSection>
-
-          <AnimatedSection animation="scale-in" delay={200}>
-            <Card className="bg-card border-border overflow-hidden">
-              <CardContent className="p-0">
-                <div className="grid lg:grid-cols-3 gap-0">
-                  {/* Founder Avatar Section */}
-                  <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8 lg:p-12 flex flex-col items-center justify-center text-center border-b lg:border-b-0 lg:border-r border-border">
-                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary to-primary/50 flex items-center justify-center mb-6 shadow-lg shadow-primary/20">
-                      <span className="text-5xl">🐘</span>
-                    </div>
-                    <h3 className="font-bold text-xl text-foreground mb-2">Team ElephantFat</h3>
-                    <p className="text-muted-foreground mb-4">Từ Editor, cho Editor</p>
-                    <div className="flex items-center gap-2 text-primary">
-                      <span className="text-2xl">🇻🇳</span>
-                      <span className="font-medium">Proudly Made in Vietnam</span>
-                    </div>
-                  </div>
-
-                  {/* Letter Content */}
-                  <div className="lg:col-span-2 p-8 lg:p-12 flex flex-col justify-center">
-                    <blockquote className="text-lg md:text-xl text-foreground leading-relaxed mb-8">
-                      "Chào anh em Editor, chúng mình hiểu nỗi đau thực tế: Trong khi trung bình mỗi job edit video hiện nay dao động từ <span className="text-primary font-semibold">200k - 500k VNĐ</span>, thì riêng chi phí ElevenLabs đã ngốn tới <span className="text-primary font-semibold">550k/tháng</span> (từ tháng thứ 2).
-                      <br /><br />
-                      Đau lòng hơn, lượng credit ít ỏi đó thường không đủ để render nổi một video dài, khiến anh em rơi vào cảnh <span className="italic">'tiền làm không đủ bù tiền tool'</span>.
-                      <br /><br />
-                      ElephantFat ra đời để xóa bỏ rào cản đó. Với mức giá cố định <span className="text-primary font-semibold">150.000 VNĐ</span>, anh em có ngay <span className="text-primary font-semibold">200.000 ký tự</span> (gấp đôi ElevenLabs) để thoải mái sáng tạo mà không lo về giá hay bẫy gia hạn."
-                    </blockquote>
-
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-6 border-t border-border">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">🤝</span>
-                        <span className="text-primary font-bold text-lg">Cày job Global, giữ lại lợi nhuận</span>
-                      </div>
-                      <Link to="/studio">
-                        <Button size="lg" className="h-12 px-6">
-                          Trải nghiệm ngay
-                          <ArrowRight className="ml-2 h-4 w-4" />
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </AnimatedSection>
-        </div>
-      </section>
 
       {/* CTA Section */}
       <section className="py-20 md:py-28 relative">
