@@ -98,7 +98,7 @@ try:
     manager = ModelManager(
         mode="tts",
         device=DEVICE,
-        half=True, 
+        half=False, 
         compile=False, 
         asr_enabled=False,
         llama_checkpoint_path=CHECKPOINT_DIR,
