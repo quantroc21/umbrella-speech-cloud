@@ -13,9 +13,36 @@ from huggingface_hub import snapshot_download
 
 # Configuration (Securely Load from RunPod Env)
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-CHECKPOINT_DIR = "checkpoints/fish-speech-1.5"
 REPO_ID = "fishaudio/fish-speech-1.5"
 HF_TOKEN = os.getenv("HF_TOKEN") 
+
+def find_model_path(model_name):
+    """
+    Find the path to a cached model in RunPod.
+    """
+    cache_dir = "/runpod-volume/huggingface-cache/hub"
+    cache_name = model_name.replace("/", "--")
+    snapshots_dir = os.path.join(cache_dir, f"models--{cache_name}", "snapshots")
+    
+    if os.path.exists(snapshots_dir):
+        snapshots = os.listdir(snapshots_dir)
+        if snapshots:
+            return os.path.join(snapshots_dir, snapshots[0])
+    return None
+
+# Determine Checkpoint Directory
+# Priority: 1. Env Var, 2. RunPod Cache, 3. Local Fallback
+if os.getenv("CHECKPOINT_DIR"):
+    CHECKPOINT_DIR = os.getenv("CHECKPOINT_DIR")
+    print(f"Using Configured Checkpoint: {CHECKPOINT_DIR}")
+else:
+    cached_path = find_model_path(REPO_ID)
+    if cached_path:
+        CHECKPOINT_DIR = cached_path
+        print(f"Using RunPod Cached Model: {CHECKPOINT_DIR}")
+    else:
+        CHECKPOINT_DIR = "checkpoints/fish-speech-1.5"
+        print(f"Using Local Model Logic: {CHECKPOINT_DIR}")
 
 # S3 / R2 Configuration
 S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY")
