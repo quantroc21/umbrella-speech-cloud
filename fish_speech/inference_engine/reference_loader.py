@@ -2,6 +2,8 @@ import io
 from hashlib import sha256
 from pathlib import Path
 from typing import Callable, Literal, Tuple
+import subprocess
+import numpy as np
 
 import torch
 import torchaudio
@@ -108,25 +110,79 @@ class ReferenceLoader:
 
     def load_audio(self, reference_audio: bytes | str, sr: int):
         """
-        Load the audio data from a file or bytes.
+        Load audio using robust FFmpeg subprocess (Bypassing Torchaudio Backend issues)
         """
-        if len(reference_audio) > 255 or not Path(reference_audio).exists():
-            audio_data = reference_audio
-            reference_audio = io.BytesIO(audio_data)
+        # 1. Prepare Input
+        input_args = []
+        stdin_data = None
+        
+        if isinstance(reference_audio, bytes) or isinstance(reference_audio, io.BytesIO):
+            input_args = ["-i", "pipe:0"]
+            stdin_data = reference_audio.getvalue() if isinstance(reference_audio, io.BytesIO) else reference_audio
+        else:
+             path_str = str(reference_audio)
+             if not Path(path_str).exists():
+                 # Handle bytes passed as path/string?
+                 logger.error(f"Audio path not found: {path_str}")
+                 # Fallback/Error?
+                 input_args = ["-i", "pipe:0"]
+                 stdin_data = reference_audio if isinstance(reference_audio, bytes) else b""
+             else:
+                 input_args = ["-i", path_str]
 
-        waveform, original_sr = torchaudio.load(reference_audio, backend=self.backend)
-
-        if waveform.shape[0] > 1:
-            waveform = torch.mean(waveform, dim=0, keepdim=True)
-
-        if original_sr != sr:
-            resampler = torchaudio.transforms.Resample(
-                orig_freq=original_sr, new_freq=sr
+        # 2. Decode to PCM Float32 via FFmpeg Pipe
+        # -ac 1 (Mono)
+        # -ar {sr} (Resample directly)
+        # -f f32le (Float 32 Little Endian)
+        cmd = [
+            "ffmpeg", 
+            "-v", "error",
+            "-y"
+        ] + input_args + [
+            "-ac", "1",
+            "-ar", str(sr),
+            "-f", "f32le",
+            "-" # Output to stdout
+        ]
+        
+        try:
+            process = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
             )
-            waveform = resampler(waveform)
+            out, err = process.communicate(input=stdin_data)
+            
+            if process.returncode != 0:
+                logger.error(f"FFmpeg decode failed: {err.decode()}")
+                # Fallback to torchaudio (Last Resort)
+                logger.warning("Falling back to standard torchaudio load...")
+                waveform, original_sr = torchaudio.load(reference_audio, backend=self.backend)
+                if waveform.shape[0] > 1:
+                    waveform = torch.mean(waveform, dim=0, keepdim=True)
+                if original_sr != sr:
+                     resampler = torchaudio.transforms.Resample(orig_freq=original_sr, new_freq=sr)
+                     waveform = resampler(waveform)
+                return waveform.squeeze().numpy()
 
-        audio = waveform.squeeze().numpy()
-        return audio
+            # 3. Convert Bytes to Numpy
+            audio_np = np.frombuffer(out, dtype=np.float32)
+            
+            return audio_np
+            
+        except Exception as e:
+            logger.error(f"Robust decode failed: {e}")
+            raise e
+            
+        # Legacy Code (REMOVED)
+        # if len(reference_audio) > 255 or not Path(reference_audio).exists():
+        #     audio_data = reference_audio
+        #     reference_audio = io.BytesIO(audio_data)
+        # 
+        # waveform, original_sr = torchaudio.load(reference_audio, backend=self.backend)
+        # ...
+
 
     def list_reference_ids(self) -> list[str]:
         """
