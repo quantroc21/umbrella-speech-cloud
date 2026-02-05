@@ -12,6 +12,10 @@ HF_REPO_ID = "fishaudio/fish-speech-1.5"
 # SECURE: Read from Environment Variable
 HF_TOKEN = os.environ.get("HF_TOKEN")
 
+# NOTE: This script is only for MANUAL Network Volume setup.
+# If you are using RunPod's "Model Caching" feature (setting 'Model' in config),
+# this script is NOT REQUIRED. runpod.io handles the download automatically.
+
 def setup_volume():
     print(f"--- [SETUP] Starting Volume Setup for Fish Speech 1.5 ---")
     print(f"--- [SETUP] Target Directory: {MODEL_DIR} ---")

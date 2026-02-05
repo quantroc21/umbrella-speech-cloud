@@ -30,9 +30,8 @@ COPY . .
 # Install dependencies using uv
 RUN uv pip install --system -e .[cu124] pydub boto3 "vector-quantize-pytorch==1.14.24"
 
-# --- v12.0 SKELETON UPDATE: Skip Model Download ---
-# We now load models from Network Volume at Runtime
-# ARG HF_TOKEN (No longer needed for build)
+# --- v12.0 SKELETON IMAGE ---
+# Use .dockerignore to exclude 'checkpoints/' and 'references/'
 # RUN python tools/docker_download.py (REMOVED)
 
 # Define the entrypoint

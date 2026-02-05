@@ -23,50 +23,76 @@ try:
     
     # List root directory to help find where the volume is
     try:
-        print(f"--- [v12.10 DEBUG] Root Directory Contents: {os.listdir('/')} ---", file=sys.stderr, flush=True)
+        print(f"--- [v12.11 DEBUG] Root Directory Contents: {os.listdir('/')} ---", file=sys.stderr, flush=True)
     except Exception as e:
-        print(f"--- [v12.10 DEBUG] Could not list /: {e} ---", file=sys.stderr, flush=True)
+        print(f"--- [v12.11 DEBUG] Could not list /: {e} ---", file=sys.stderr, flush=True)
 
-    possible_mounts = [
-        "/runpod-volume",
-        "/fish-speech-volume", # Name based mount?
-        "/workspace",
-        "/volume",
-        "/data"
-    ]
-    
+    # --- v12.11: RunPod Model Caching Logic ---
+    CACHE_DIR = "/runpod-volume/huggingface-cache/hub"
+
+    def find_model_path(model_name):
+        """
+        Find the path to a cached model in RunPod's cache architecture.
+        Args:
+            model_name: The model name from Hugging Face (e.g., 'fishaudio/fish-speech-1.5')
+        Returns:
+            The full path to the cached model snapshot, or None if not found
+        """
+        # Convert model name format: "Org/Model" -> "models--Org--Model"
+        cache_name = model_name.replace("/", "--")
+        snapshots_dir = os.path.join(CACHE_DIR, f"models--{cache_name}", "snapshots")
+        
+        # Check if the model exists in cache
+        if os.path.exists(snapshots_dir):
+            snapshots = os.listdir(snapshots_dir)
+            if snapshots:
+                # Return the path to the first (usually only) snapshot
+                return os.path.join(snapshots_dir, snapshots[0])
+        return None
+
+    # 1. Try RunPod Project Cache (Preferred)
+    print("--- [v12.11 DEBUG] Checking RunPod Project Cache... ---", file=sys.stderr, flush=True)
+    CACHED_MODEL_PATH = find_model_path("fishaudio/fish-speech-1.5")
+
     FISH_1_5_VOLUME = None
-    for mount in possible_mounts:
-        check_path = os.path.join(mount, "checkpoints", "fish-speech-1.5")
-        if os.path.exists(check_path):
-            FISH_1_5_VOLUME = check_path
-            print(f"--- [v12.10 FOUND] Found 1.5 Model at: {FISH_1_5_VOLUME} ---", file=sys.stderr, flush=True)
-            break
-        else:
-             print(f"--- [v12.10 SEARCH] Not found at: {check_path} ---", file=sys.stderr, flush=True)
+
+    if CACHED_MODEL_PATH:
+        print(f"--- [v12.11 SUCCESS] Found Cached Model at: {CACHED_MODEL_PATH} ---", file=sys.stderr, flush=True)
+        FISH_1_5_VOLUME = CACHED_MODEL_PATH
+    else:
+        print(f"--- [v12.11 INFO] Model not found in Cache. Checking Manual Volumes... ---", file=sys.stderr, flush=True)
+        # 2. Fallback to Manual Network Volume
+        possible_mounts = [
+            "/runpod-volume",
+            "/fish-speech-volume", 
+            "/workspace",
+            "/volume",
+            "/data"
+        ]
+        
+        for mount in possible_mounts:
+            check_path = os.path.join(mount, "checkpoints", "fish-speech-1.5")
+            if os.path.exists(check_path):
+                FISH_1_5_VOLUME = check_path
+                print(f"--- [v12.11 FOUND] Found Manual Volume at: {FISH_1_5_VOLUME} ---", file=sys.stderr, flush=True)
+                break
 
     if FISH_1_5_VOLUME:
         checkpoint_dir = FISH_1_5_VOLUME
-        print(f"--- [v12.10 UPGRADE] Volume Status: READY (v1.5) ---", file=sys.stderr, flush=True)
-        # v12: Pre-warm the volume files to RAM
-        print(f"--- [v12.10 INIT] Pre-warming 4GB Model Weights (v1.5)... ---", file=sys.stderr, flush=True)
+        print(f"--- [v12.11 CONFIG] Active Model Path: {checkpoint_dir} ---", file=sys.stderr, flush=True)
     else:
-        # Fallback to local
-        checkpoint_dir = "checkpoints/openaudio-s1-mini"
-        print(f"--- [v12.10 WARNING] Fish 1.5 NOT Found! Fallback to: {checkpoint_dir} ---", file=sys.stderr, flush=True)
-        # We will allow fallback for now to see logs, but warn heavily
-        
-    # v8 Module 2: Pre-warming
-    if os.path.exists(checkpoint_dir):
-        print(f"--- [v8 PRE-WARM] Touching model files in {checkpoint_dir}... ---", file=sys.stderr, flush=True)
-        try:
-            for fname in os.listdir(checkpoint_dir):
-                fpath = os.path.join(checkpoint_dir, fname)
-                if os.path.isfile(fpath):
-                    with open(fpath, 'rb') as f:
-                        f.read(1024) # Read first 1KB to trigger OS cache
-        except Exception as e:
-            print(f"--- [v8 WARNING] Pre-warm failed: {e} ---", file=sys.stderr, flush=True)
+        # Critical Failure if V1.5 is missing (Legacy fallback removed to ensure correctness)
+        print(f"--- [v12.11 CRITICAL] Fish Speech 1.5 NOT Found in Cache or Volume! ---", file=sys.stderr, flush=True)
+        checkpoint_dir = None
+        # We allow the script to proceed but it will likely fail or we should exit?
+        # For now, let's fall back to /app/checkpoints BUT warn validly if it's empty (Skeleton)
+        if os.path.exists("checkpoints/fish-speech-1.5"):
+             checkpoint_dir = "checkpoints/fish-speech-1.5"
+             print(f"--- [v12.11 BACKUP] Found local baked checkpoint. Using it. ---", file=sys.stderr, flush=True)
+        else:
+             print("--- [CRITICAL] No model found anywhere. Handler will likely crash. ---", file=sys.stderr, flush=True)
+             # Let it crash or error out in ModelManager logic
+             checkpoint_dir = "/runpod-volume/dummy" # Force failure in load
 
     print("--- [DEBUG] Importing Core Libraries... ---", file=sys.stderr, flush=True)
     import base64
