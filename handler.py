@@ -325,13 +325,13 @@ try:
             if not text:
                 return {"error": "No text provided"}
 
-            # v8 Module 3: 500 Character Threshold (Lowered in v10.9)
-            if len(text) < 500:
-                print(f"--- [v10.9 GUARD] Request rejected. Length: {len(text)} < 500 ---", file=sys.stderr, flush=True)
-                return {
-                    "error": f"Input must be at least 500 characters. (Current: {len(text)})",
-                    "status": "failed"
-                }
+            # v8 Module 3: 500 Character Threshold REMOVED (v15.5)
+            # if len(text) < 500:
+            #     print(f"--- [v10.9 GUARD] Request rejected. Length: {len(text)} < 500 ---", file=sys.stderr, flush=True)
+            #     return {
+            #         "error": f"Input must be at least 500 characters. (Current: {len(text)})",
+            #         "status": "failed"
+            #     }
 
             # v8 Module 1: Voice-Lock Protocol Logging
             voice_id = job_input.get("reference_id")
