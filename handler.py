@@ -12,6 +12,21 @@ import numpy as np
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
+# --- v15.6 FIX: Enforce FFmpeg Backend to prevent buzzing ---
+try:
+    import torchaudio
+    # torchaudio 2.1+ uses different backend logic, but explicit check matches previous fix
+    backends = torchaudio.list_audio_backends()
+    print(f"--- [v15.6 AUDIO] Available Backends: {backends} ---", file=sys.stderr, flush=True)
+    if "ffmpeg" in backends:
+        torchaudio.set_audio_backend("ffmpeg")
+        print("--- [v15.6 AUDIO] Enforced FFmpeg backend. ---", file=sys.stderr, flush=True)
+    else:
+        print("--- [v15.6 WARNING] FFmpeg backend not found! Buzzing may occur. ---", file=sys.stderr, flush=True)
+except Exception as e:
+    print(f"--- [v15.6 WARNING] Failed to set audio backend: {e} ---", file=sys.stderr, flush=True)
+
+
 print("--- [DEBUG] Starting handler script (V2-Safe)... ---", file=sys.stderr, flush=True)
 
 try:
