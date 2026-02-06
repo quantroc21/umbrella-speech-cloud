@@ -371,13 +371,7 @@ def decode_n_tokens(
         else:
             window = previous_tokens[:, i - win_size : i]
 
-        with (
-            torch.backends.cuda.sdp_kernel(
-                enable_flash=False, enable_mem_efficient=False, enable_math=True
-            )
-            if torch.cuda.is_available()
-            else nullcontext()
-        ):  # Actually better for Inductor to codegen attention here
+        if True:  # Removed sdp_kernel context to allow Flash Attention
             next_token = decode_one_token(
                 model=model,
                 x=cur_token,
