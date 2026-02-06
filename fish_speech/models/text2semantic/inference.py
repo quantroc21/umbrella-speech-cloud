@@ -415,6 +415,7 @@ def generate(
 
     # create an empty tensor of the expected final shape and fill in the current tokens
     T = prompt.size(1)
+    device, dtype = prompt.device, prompt.dtype
     # semantic_id = model.tokenizer.convert_tokens_to_ids("<|semantic|>")
     # semantic_id = model.tokenizer.convert_tokens_to_ids("<|semantic|>")
     # Convert to Tensor to prevent torch.compile recompilation on list arguments
@@ -433,8 +434,6 @@ def generate(
     else:
         T_new = model.config.max_seq_len
         max_new_tokens = T_new - T
-
-    device, dtype = prompt.device, prompt.dtype
 
     codebook_dim = 1 + model.config.num_codebooks
     # create an empty tensor of the expected final shape and fill in the current tokens
