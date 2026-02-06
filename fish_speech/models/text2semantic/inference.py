@@ -691,14 +691,14 @@ def load_model(checkpoint_path, device, precision, compile=False, is_agent=False
         )
         logger.info("Using NaiveTransformer")
 
-        if compile:
-            logger.info("Compiling function...")
-            decode_one_token = torch.compile(
-                decode_one_token,
-                fullgraph=True,
-                backend="inductor" if torch.cuda.is_available() else "aot_eager",
-                mode="reduce-overhead" if torch.cuda.is_available() else None,
-            )
+    if compile:
+        logger.info("Compiling function...")
+        decode_one_token = torch.compile(
+            decode_one_token,
+            fullgraph=True,
+            backend="inductor" if torch.cuda.is_available() else "aot_eager",
+            mode="reduce-overhead" if torch.cuda.is_available() else None,
+        )
 
     return model.eval(), decode_one_token
 
