@@ -851,7 +851,8 @@ def generate_long(
                  # Left padding with CODEBOOK_PAD_TOKEN_ID (0)
                  # This ensures the generation loop always starts at a multiple of 512.
                  # "0" is usually safe for "silence" or ignored tokens in this architecture.
-                 pad_tensor = torch.full((1, padding_length), CODEBOOK_PAD_TOKEN_ID, device=device, dtype=cat_encoded.dtype)
+                 # Use cat_encoded.size(0) to match the channel/batch dimension (which is apparently 9).
+                 pad_tensor = torch.full((cat_encoded.size(0), padding_length), CODEBOOK_PAD_TOKEN_ID, device=device, dtype=cat_encoded.dtype)
                  cat_encoded = torch.cat([pad_tensor, cat_encoded], dim=1)
 
             t0 = time.perf_counter()
