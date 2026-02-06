@@ -1,6 +1,6 @@
 
 # v13.9: Highly Robust Build using UV and standardized dependencies
-FROM pytorch/pytorch:2.4.1-cuda12.4-cudnn9-runtime
+FROM pytorch/pytorch:2.4.1-cuda12.4-cudnn9-devel
 
 # Set working directory
 WORKDIR /app
@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y \
     libasound2-dev \
     cmake \
     pkg-config \
+    ninja-build \
     && rm -rf /var/lib/apt/lists/*
 
 # Install UV for faster and more reliable python package management
