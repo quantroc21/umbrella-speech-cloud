@@ -34,9 +34,20 @@ COPY . .
 # 1. Install build-time requirements first
 # 2. Install the project WITHOUT the [stable] extra to preserve base image Torch
 # 3. Explicitly include runpod and the vq-pytorch fix
-RUN uv pip install --system --no-cache setuptools setuptools-scm wheel \
-    && uv pip install --system --no-cache . \
-    && uv pip install --system --no-cache runpod "vector-quantize-pytorch==1.14.24" soundfile huggingface-hub boto3 flash-attn
+# Limit compilation threads to prevent OOM on GitHub Runners
+ENV MAX_JOBS=2
+
+# Install Python build dependencies
+RUN uv pip install --system --no-cache setuptools setuptools-scm wheel ninja packaging
+
+# Install Project
+RUN uv pip install --system --no-cache .
+
+# Install Runtime Deps
+RUN uv pip install --system --no-cache runpod "vector-quantize-pytorch==1.14.24" soundfile huggingface-hub boto3
+
+# Install Flash Attention (Separate step, using standard pip for safety)
+RUN pip install --no-cache-dir flash-attn --no-build-isolation
 
 # Pre-download models to bake them into the image (Fast Cold Start)
 # RUN python tools/download_models.py -> Removed for v15.9 (Network Based / Cached)
