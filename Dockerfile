@@ -35,7 +35,7 @@ COPY . .
 # 3. Explicitly include runpod and the vq-pytorch fix
 RUN uv pip install --system --no-cache setuptools setuptools-scm wheel \
     && uv pip install --system --no-cache . \
-    && uv pip install --system --no-cache runpod "vector-quantize-pytorch==1.14.24" soundfile huggingface-hub boto3
+    && uv pip install --system --no-cache runpod "vector-quantize-pytorch==1.14.24" soundfile huggingface-hub boto3 flash-attn
 
 # Pre-download models to bake them into the image (Fast Cold Start)
 # RUN python tools/download_models.py -> Removed for v15.9 (Network Based / Cached)
