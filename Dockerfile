@@ -8,6 +8,9 @@ WORKDIR /app
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
+# Persist compilation cache to the network volume
+ENV TORCHINDUCTOR_CACHE_DIR=/runpod-volume/.cache/torch
+RUN mkdir -p /runpod-volume/.cache/torch
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
