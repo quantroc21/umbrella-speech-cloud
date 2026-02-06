@@ -373,11 +373,11 @@ def decode_n_tokens(
 
         with (
             torch.backends.cuda.sdp_kernel(
-                enable_flash=True, enable_mem_efficient=True, enable_math=True
+                enable_flash=False, enable_mem_efficient=False, enable_math=True
             )
             if torch.cuda.is_available()
             else nullcontext()
-        ):
+        ):  # Actually better for Inductor to codegen attention here
             next_token = decode_one_token(
                 model=model,
                 x=cur_token,
@@ -504,8 +504,8 @@ def decode_n_tokens_agent(
             window = previous_tokens[:, :, i - win_size : i]
 
         with sdpa_kernel(
-            [SDPBackend.FLASH_ATTENTION, SDPBackend.EFFICIENT_ATTENTION, SDPBackend.MATH]
-        ):
+            SDPBackend.MATH
+        ):  # Actually better for Inductor to codegen attention here
             next_token = decode_one_token(
                 model=model,
                 x=cur_token,
