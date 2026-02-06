@@ -697,7 +697,7 @@ def load_model(checkpoint_path, device, precision, compile=False, is_agent=False
                 decode_one_token,
                 fullgraph=True,
                 backend="inductor" if torch.cuda.is_available() else "aot_eager",
-                mode="max-autotune" if torch.cuda.is_available() else None,
+                mode="reduce-overhead" if torch.cuda.is_available() else None,
             )
 
     return model.eval(), decode_one_token
@@ -833,8 +833,26 @@ def generate_long(
             if use_prompt:
                 partial_encoded = encoded_prompts + partial_encoded
 
+            # Revert to reduce-overhead for speed
+            if sample_idx == 0 and seg_idx == 0 and compile: # Only print this once
+                 pass
+
             cat_encoded = torch.cat(partial_encoded, dim=1)
             prompt_length = cat_encoded.size(1)
+
+            # --- KEY FIX: Pad to nearest 512 to stabilize shapes for CUDA Graphs ---
+            # This drastically reduces recompilation frequency.
+            # Bucket sizes: 512, 1024, 1536, ...
+            bucket_size = 512
+            target_length = ((prompt_length + bucket_size - 1) // bucket_size) * bucket_size
+            padding_length = target_length - prompt_length
+            
+            if padding_length > 0:
+                 # Left padding with CODEBOOK_PAD_TOKEN_ID (0)
+                 # This ensures the generation loop always starts at a multiple of 512.
+                 # "0" is usually safe for "silence" or ignored tokens in this architecture.
+                 pad_tensor = torch.full((1, padding_length), CODEBOOK_PAD_TOKEN_ID, device=device, dtype=cat_encoded.dtype)
+                 cat_encoded = torch.cat([pad_tensor, cat_encoded], dim=1)
 
             t0 = time.perf_counter()
             y = generate(
@@ -855,7 +873,17 @@ def generate_long(
 
             t = time.perf_counter() - t0
 
-            tokens_generated = y.size(1) - prompt_length
+            # Adjust tokens_generated calculation to account for padding
+            # y contains [padding + prompt + generated]
+            # prompt_length (original) is relevant for slicing?
+            # Wait, `y` returns everything.
+            # We need to slice off the padding AND the prompt.
+            # But prompt_length variable above is the ORIGINAL length.
+            # cat_encoded.size(1) is the PADDED length.
+            
+            # generated tokens = total_length - padded_prompt_length
+            padded_prompt_length = cat_encoded.size(1)
+            tokens_generated = y.size(1) - padded_prompt_length
             tokens_sec = tokens_generated / t
             logger.info(
                 f"Generated {tokens_generated} tokens in {t:.02f} seconds, {tokens_sec:.02f} tokens/sec"
@@ -871,10 +899,11 @@ def generate_long(
 
             # Put the generated tokens
             # since there is <im_end>, we remove last token
-            codes = y[1:, prompt_length + 1 :].clone()
+            # Note: We slice from padded_prompt_length to ignore padding and prompt
+            codes = y[1:, padded_prompt_length + 1 :].clone()
             assert (codes >= 0).all(), f"Negative code found"
 
-            decoded = y[:, prompt_length:].clone()
+            decoded = y[:, padded_prompt_length:].clone()
             # But for global encoding, we should keep the <im_end> token
 
             global_encoded.append(decoded)
