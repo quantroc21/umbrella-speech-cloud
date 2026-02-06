@@ -697,8 +697,7 @@ def load_model(checkpoint_path, device, precision, compile=False, is_agent=False
                 decode_one_token,
                 fullgraph=True,
                 backend="inductor" if torch.cuda.is_available() else "aot_eager",
-                # mode="reduce-overhead" -> Removed to allow better caching and faster startup.
-                # Default Inductor is fast enough (100+ t/s) and caches reliably.
+                mode="reduce-overhead" if torch.cuda.is_available() else None,
             )
 
     return model.eval(), decode_one_token

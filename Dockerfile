@@ -11,6 +11,7 @@ ENV PYTHONUNBUFFERED=1
 # Persist compilation cache to the network volume
 ENV TORCHINDUCTOR_CACHE_DIR=/runpod-volume/.cache/torch
 ENV TRITON_CACHE_DIR=/runpod-volume/.cache/triton
+ENV TORCHINDUCTOR_FX_GRAPH_CACHE=1
 RUN mkdir -p /runpod-volume/.cache/torch /runpod-volume/.cache/triton
 
 # Install system dependencies
