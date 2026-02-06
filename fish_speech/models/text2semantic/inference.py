@@ -840,10 +840,11 @@ def generate_long(
             cat_encoded = torch.cat(partial_encoded, dim=1)
             prompt_length = cat_encoded.size(1)
 
-            # --- KEY FIX: Pad to nearest 512 to stabilize shapes for CUDA Graphs ---
+            # --- KEY FIX: Pad to nearest 2048 to stabilize shapes for CUDA Graphs ---
             # This drastically reduces recompilation frequency.
-            # Bucket sizes: 512, 1024, 1536, ...
-            bucket_size = 512
+            # Bucket sizes: 2048, 4096, ...
+            # Large bucket size means we mostly use the FIRST bucket for everything.
+            bucket_size = 2048
             target_length = ((prompt_length + bucket_size - 1) // bucket_size) * bucket_size
             padding_length = target_length - prompt_length
             
