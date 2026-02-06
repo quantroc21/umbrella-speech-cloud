@@ -10,7 +10,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 # Persist compilation cache to the network volume
 ENV TORCHINDUCTOR_CACHE_DIR=/runpod-volume/.cache/torch
-RUN mkdir -p /runpod-volume/.cache/torch
+ENV TRITON_CACHE_DIR=/runpod-volume/.cache/triton
+RUN mkdir -p /runpod-volume/.cache/torch /runpod-volume/.cache/triton
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
