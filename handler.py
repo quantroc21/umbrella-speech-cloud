@@ -132,13 +132,13 @@ DECODER_CONFIG = "firefly_gan_vq"
 try:
     manager = ModelManager(
         mode="tts",
-        device=DEVICE,
-        half=True, 
-        compile=True, 
+        device="cuda",
+        half=True,
+        compile=True,
         asr_enabled=False,
-        llama_checkpoint_path=CHECKPOINT_DIR,
-        decoder_config_name=DECODER_CONFIG,
-        decoder_checkpoint_path=DECODER_CHECKPOINT
+        llama_checkpoint_path=str(CHECKPOINT_DIR),
+        decoder_checkpoint_path=str(DECODER_CHECKPOINT),
+        decoder_config_name=str(DECODER_CONFIG),
     )
     print("ModelManager Initialized Successfully.")
 except Exception as e:
