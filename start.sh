@@ -5,17 +5,17 @@ set -e
 MOUNT_POINT="/runpod-volume"
 mkdir -p "$MOUNT_POINT"
 
-# Check if S3 credentials are provided
-if [[ -n "$S3_ACCESS_KEY_ID" && -n "$S3_SECRET_ACCESS_KEY" && -n "$S3_ENDPOINT_URL" && -n "$S3_BUCKET_NAME" ]]; then
-    echo "Mounting S3 Volume: $S3_BUCKET_NAME..."
+# Check if S3 credentials are provided (Using _NETWORK suffix to avoid conflict with R2)
+if [[ -n "$S3_ACCESS_KEY_ID_NETWORK" && -n "$S3_SECRET_ACCESS_KEY_NETWORK" && -n "$S3_ENDPOINT_URL_NETWORK" && -n "$S3_BUCKET_NAME_NETWORK" ]]; then
+    echo "Mounting S3 Volume: $S3_BUCKET_NAME_NETWORK..."
     
     # Write credentials to a file for s3fs
-    echo "$S3_ACCESS_KEY_ID:$S3_SECRET_ACCESS_KEY" > /etc/passwd-s3fs
+    echo "$S3_ACCESS_KEY_ID_NETWORK:$S3_SECRET_ACCESS_KEY_NETWORK" > /etc/passwd-s3fs
     chmod 600 /etc/passwd-s3fs
 
     # Mount using s3fs
-    s3fs "$S3_BUCKET_NAME" "$MOUNT_POINT" \
-        -o url="$S3_ENDPOINT_URL" \
+    s3fs "$S3_BUCKET_NAME_NETWORK" "$MOUNT_POINT" \
+        -o url="$S3_ENDPOINT_URL_NETWORK" \
         -o use_path_request_style \
         -o allow_other \
         -o umask=000 \
