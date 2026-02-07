@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y \
     cmake \
     pkg-config \
     ninja-build \
+    s3fs \
     && rm -rf /var/lib/apt/lists/*
 
 # Install UV for faster and more reliable python package management
@@ -61,4 +62,5 @@ RUN pip install --no-cache-dir flash-attn --no-build-isolation
 RUN chmod +x entrypoint.sh || true
 
 # Define the entrypoint
-CMD [ "python", "-u", "handler.py" ]
+# Run the startup script (Handles S3 mounting + Inference)
+CMD [ "bash", "start.sh" ]
