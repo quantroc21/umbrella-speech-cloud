@@ -126,7 +126,7 @@ try:
         mode="tts",
         device=DEVICE,
         half=True, 
-        compile=True, 
+        compile=False, 
         asr_enabled=False,
         llama_checkpoint_path=CHECKPOINT_DIR,
         decoder_config_name=DECODER_CONFIG,

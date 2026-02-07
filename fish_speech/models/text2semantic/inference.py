@@ -865,7 +865,7 @@ def generate_long(
             )
 
             if sample_idx == 0 and seg_idx == 0 and compile:
-                logger.info(f"Compilation time: {time.perf_counter() - t0:.2f} seconds")
+                logger.info(f"First run time (Compiling?): {time.perf_counter() - t0:.2f} seconds")
 
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
