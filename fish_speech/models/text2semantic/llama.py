@@ -776,7 +776,7 @@ class Attention(nn.Module):
                         k,
                         v,
                         dropout_p=self.dropout if self.training else 0.0,
-                        is_causal=True,
+                        is_causal=seqlen > 1,
                         # No third party attn_mask here to use flash_attention
                     )
             else:
