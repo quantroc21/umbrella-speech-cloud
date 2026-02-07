@@ -371,7 +371,7 @@ def decode_n_tokens(
         else:
             window = previous_tokens[:, i - win_size : i]
 
-        with sdpa_kernel(SDPBackend.FLASH_ATTENTION):
+        if True:
             next_token = decode_one_token(
                 model=model,
                 x=cur_token,

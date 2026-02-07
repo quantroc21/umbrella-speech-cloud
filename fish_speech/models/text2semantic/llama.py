@@ -757,6 +757,13 @@ class Attention(nn.Module):
 
         if self.kv_cache is not None:
             k, v = self.kv_cache.update(input_pos, k, v)
+        
+        # Optim: Slice K/V to valid length to allow Flash Attention (which dislikes masks)
+        if self.kv_cache is not None and input_pos is not None and x.size(1) == 1 and input_pos.numel() == 1:
+             valid_len = input_pos[0] + 1
+             k = k[:, :, :valid_len, :]
+             v = v[:, :, :valid_len, :]
+             mask = None
 
         k = k.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
         v = v.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
