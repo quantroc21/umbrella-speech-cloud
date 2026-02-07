@@ -19,7 +19,10 @@ if [[ -n "$S3_ACCESS_KEY_ID_NETWORK" && -n "$S3_SECRET_ACCESS_KEY_NETWORK" && -n
         -o use_path_request_style \
         -o allow_other \
         -o umask=000 \
-        -o mp_umask=000
+        -o mp_umask=000 \
+        -o nonempty
+
+    echo "S3 Volume mounted at $MOUNT_POINT"
 
     echo "S3 Volume mounted at $MOUNT_POINT"
 else
