@@ -757,7 +757,10 @@ class Attention(nn.Module):
 
         if self.kv_cache is not None:
             k, v = self.kv_cache.update(input_pos, k, v)
-        
+
+        k = k.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
+        v = v.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
+
         if self.use_sdpa:
             y = F.scaled_dot_product_attention(
                 q,
