@@ -371,7 +371,7 @@ def decode_n_tokens(
         else:
             window = previous_tokens[:, i - win_size : i]
 
-        if True:  # Removed sdp_kernel context to allow Flash Attention
+        with sdpa_kernel(SDPBackend.FLASH_ATTENTION):
             next_token = decode_one_token(
                 model=model,
                 x=cur_token,
