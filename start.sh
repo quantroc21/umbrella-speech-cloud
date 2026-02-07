@@ -5,28 +5,18 @@ set -e
 MOUNT_POINT="/runpod-volume"
 mkdir -p "$MOUNT_POINT"
 
-# Check if S3 credentials are provided (Using _NETWORK suffix to avoid conflict with R2)
-if [[ -n "$S3_ACCESS_KEY_ID_NETWORK" && -n "$S3_SECRET_ACCESS_KEY_NETWORK" && -n "$S3_ENDPOINT_URL_NETWORK" && -n "$S3_BUCKET_NAME_NETWORK" ]]; then
-    echo "Mounting S3 Volume: $S3_BUCKET_NAME_NETWORK..."
+# Check if S3 credentials are provided (Using _NETWORK suffix)
+if [[ -n "$S3_ACCESS_KEY_ID_NETWORK" && -n "$S3_SECRET_ACCESS_KEY_NETWORK" ]]; then
+    echo "Starting Python Cache Sync..."
     
-    # Write credentials to a file for s3fs
-    echo "$S3_ACCESS_KEY_ID_NETWORK:$S3_SECRET_ACCESS_KEY_NETWORK" > /etc/passwd-s3fs
-    chmod 600 /etc/passwd-s3fs
-
-    # Mount using s3fs
-    s3fs "$S3_BUCKET_NAME_NETWORK" "$MOUNT_POINT" \
-        -o url="$S3_ENDPOINT_URL_NETWORK" \
-        -o use_path_request_style \
-        -o allow_other \
-        -o umask=000 \
-        -o mp_umask=000 \
-        -o nonempty
-
-    echo "S3 Volume mounted at $MOUNT_POINT"
-
-    echo "S3 Volume mounted at $MOUNT_POINT"
+    # 1. Restore Cache (Blocking - wait for it before starting inference)
+    python tools/cache_sync.py restore
+    
+    # 2. Start Background Monitor (Syncs new files to S3 every 60s)
+    python tools/cache_sync.py monitor &
+    
 else
-    echo "WARNING: S3 Credentials not found. Compilation cache will NOT persist."
+    echo "WARNING: S3 Network Credentials not found. Cache will NOT persist."
 fi
 
 # Ensure cache directories exist (local or mounted)
