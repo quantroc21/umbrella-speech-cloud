@@ -12,6 +12,14 @@ from fish_speech.utils.schema import ServeTTSRequest, ServeReferenceAudio
 from huggingface_hub import snapshot_download
 
 # Configuration (Securely Load from RunPod Env)
+# --- v15.30: FORCE PERSISTENT COMPILATION CACHE ---
+# This ensures that once compiled (25s), the kernels are saved to the Network Volume.
+# Subsequent containers will load them instantly (<3s).
+os.environ["TORCHINDUCTOR_CACHE_DIR"] = "/runpod-volume/torch_compile_cache"
+os.environ["TORCHINDUCTOR_FX_GRAPH_CACHE"] = "1"
+os.makedirs("/runpod-volume/torch_compile_cache", exist_ok=True)
+# --------------------------------------------------
+
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 REPO_ID = "fishaudio/fish-speech-1.5"
 HF_TOKEN = os.getenv("HF_TOKEN") 
@@ -126,7 +134,7 @@ try:
         mode="tts",
         device=DEVICE,
         half=True, 
-        compile=False, 
+        compile=True, 
         asr_enabled=False,
         llama_checkpoint_path=CHECKPOINT_DIR,
         decoder_config_name=DECODER_CONFIG,
