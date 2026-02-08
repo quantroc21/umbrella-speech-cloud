@@ -274,7 +274,7 @@ def handler(job):
     RunPod Handler for FishSpeech 1.5
     Supports: task="tts" and task="list_voices"
     """
-    # SIGNAL BUSY START
+    # SIGNAL BUSY START (Lock ASAP to prevent sync interfering with any part of the job)
     IS_INFERENCE_BUSY.set()
     
     try:
