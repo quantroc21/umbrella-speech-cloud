@@ -548,7 +548,7 @@ class DualARTransformer(BaseTransformer):
         )
 
         self.fast_layers = nn.ModuleList(
-            TransformerBlock(override_config, use_sdpa=False)
+            TransformerBlock(override_config, use_sdpa=True)
             for _ in range(config.n_fast_layer)
         )
         self.fast_norm = RMSNorm(config.fast_dim, eps=config.norm_eps)
