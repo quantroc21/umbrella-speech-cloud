@@ -36,11 +36,14 @@ def get_s3_client():
     region = get_region_from_endpoint(S3_ENDPOINT)
     print(f"[Sync] Connecting to S3 Endpoint: {S3_ENDPOINT} (Region: {region})", flush=True)
 
-    # TIMEOUT CONFIG: Fail fast if network is dead
+    # TIMEOUT & ADDRESSING CONFIG
+    # FIX: RunPod S3 often requires PATH style (endpoint/bucket) not VIRTUAL HOST style (bucket.endpoint)
+    # The hang was likely DNS failing to resolve bucket.endpoint
     config = Config(
         connect_timeout=10, 
         read_timeout=60,
-        retries={'max_attempts': 3}
+        retries={'max_attempts': 3},
+        s3={'addressing_style': 'path'}
     )
 
     return boto3.client(
