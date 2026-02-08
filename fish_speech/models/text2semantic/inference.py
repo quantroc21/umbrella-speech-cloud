@@ -694,7 +694,6 @@ def load_model(checkpoint_path, device, precision, compile=False, is_agent=False
             decode_one_token,
             fullgraph=True,
             backend="inductor" if torch.cuda.is_available() else "aot_eager",
-            backend="inductor" if torch.cuda.is_available() else "aot_eager",
             mode="reduce-overhead" if torch.cuda.is_available() else None,
         )
 
