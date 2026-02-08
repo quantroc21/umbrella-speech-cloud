@@ -62,8 +62,8 @@ def configure_cache():
     os.environ["TRITON_CACHE_DIR"] = str(triton_cache)
     os.environ["TORCHINDUCTOR_FX_GRAPH_CACHE"] = "1"
     # v15.46: Fix for 'symbolic_shapes' noise
-    os.environ["TORCH_CUDAGRAPH_SKIP_GUARD_MANAGER"] = "1"
-    
+    # os.environ["TORCH_CUDAGRAPH_SKIP_GUARD_MANAGER"] = "1"
+        
     print(f"[Cache] TORCHINDUCTOR_CACHE_DIR = {os.environ['TORCHINDUCTOR_CACHE_DIR']}")
 
 # Execute Configuration Immediately
