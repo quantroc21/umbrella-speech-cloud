@@ -61,6 +61,8 @@ def configure_cache():
     os.environ["TORCHINDUCTOR_CACHE_DIR"] = str(torch_cache)
     os.environ["TRITON_CACHE_DIR"] = str(triton_cache)
     os.environ["TORCHINDUCTOR_FX_GRAPH_CACHE"] = "1"
+    # v15.46: Fix for 'symbolic_shapes' noise
+    os.environ["TORCH_CUDAGRAPH_SKIP_GUARD_MANAGER"] = "1"
     
     print(f"[Cache] TORCHINDUCTOR_CACHE_DIR = {os.environ['TORCHINDUCTOR_CACHE_DIR']}")
 
@@ -234,87 +236,128 @@ def preprocess_text(text):
     
     return text.strip()
 
+import threading
+import time
+from tools.cache_sync import backup
+
+# --- v15.46: PERFORMANCE & STABILITY LOCKING ---
+# We use a flag to signal when the GPU/Compiler is busy.
+# The background sync will PAUSE if this flag is set.
+IS_INFERENCE_BUSY = threading.Event()
+IS_INFERENCE_BUSY.clear()
+
+def background_sync_monitor():
+    """
+    Runs backup() every 60s, but ONLY if inference is not running.
+    This prevents 'tar' from reading files while they are being written.
+    """
+    print("[Sync Monitor] Started background thread.")
+    while True:
+        time.sleep(60)
+        if IS_INFERENCE_BUSY.is_set():
+            print("[Sync Monitor] Inference is busy. Skipping sync this cycle.")
+            continue
+            
+        try:
+            # Check one more time before starting heavy op
+            if not IS_INFERENCE_BUSY.is_set():
+                backup()
+        except Exception as e:
+            print(f"[Sync Monitor] Backup failed: {e}")
+
+# Start the monitor immediately
+threading.Thread(target=background_sync_monitor, daemon=True).start()
+# --------------------------------------------------
+
 def handler(job):
     """
     RunPod Handler for FishSpeech 1.5
     Supports: task="tts" and task="list_voices"
     """
-    job_input = job['input']
-    task = job_input.get('task', 'tts')
-
-    if task == "list_voices":
-        print("Dynamically listing voices from R2...")
-        try:
-            s3 = get_s3_client()
-            response = s3.list_objects_v2(Bucket=S3_BUCKET_NAME, Prefix="references/", Delimiter="/")
-            voices = []
-            if 'CommonPrefixes' in response:
-                for prefix in response['CommonPrefixes']:
-                    voice_name = prefix['Prefix'].split('/')[-2]
-                    voices.append({
-                        "id": voice_name,
-                        "name": voice_name,
-                        "description": "Cloud Voice (R2)"
-                    })
-            return voices
-        except Exception as e:
-            print(f"Error listing voices: {e}")
-            return [
-                { "id": "Donal Trump", "name": "Donald Trump", "description": "Cloud Voice (Local)" },
-            ]
+    # SIGNAL BUSY START
+    IS_INFERENCE_BUSY.set()
     
-    # Default TTS Task
-    text = job_input.get('text', '')
-    reference_id = job_input.get('reference_id', None)
-    chunk_length = job_input.get('chunk_length', 200) 
-    max_new_tokens = job_input.get('max_new_tokens', 1024)
-    top_p = job_input.get('top_p', 0.7)
-    repetition_penalty = job_input.get('repetition_penalty', 1.2)
-    temperature = job_input.get('temperature', 0.7)
-    seed = job_input.get('seed', None)
-    
-    # NEW: Preprocess text for emotions
-    processed_text = preprocess_text(text)
-    print(f"Original Text: '{text[:30]}...' -> Processed: '{processed_text[:30]}...'")
-
-    # NEW: Ensure reference audio is available on this worker
-    if reference_id:
-        ensure_references(reference_id)
-
-    print(f"Processing TTS: Text='{processed_text[:20]}...', Voice='{reference_id}'")
-
-    request = ServeTTSRequest(
-        text=processed_text,
-        references=[], 
-        reference_id=reference_id,
-        max_new_tokens=max_new_tokens,
-        chunk_length=chunk_length,
-        top_p=top_p,
-        repetition_penalty=repetition_penalty,
-        temperature=temperature,
-        seed=seed,
-        format="wav",
-        streaming=False
-    )
-
     try:
-        engine = manager.tts_inference_engine
-        fake_audios = next(inference(request, engine))
+        job_input = job['input']
+        task = job_input.get('task', 'tts')
+    
+        if task == "list_voices":
+            print("Dynamically listing voices from R2...")
+            try:
+                s3 = get_s3_client()
+                response = s3.list_objects_v2(Bucket=S3_BUCKET_NAME, Prefix="references/", Delimiter="/")
+                voices = []
+                if 'CommonPrefixes' in response:
+                    for prefix in response['CommonPrefixes']:
+                        voice_name = prefix['Prefix'].split('/')[-2]
+                        voices.append({
+                            "id": voice_name,
+                            "name": voice_name,
+                            "description": "Cloud Voice (R2)"
+                        })
+                return voices
+            except Exception as e:
+                print(f"Error listing voices: {e}")
+                return [
+                    { "id": "Donal Trump", "name": "Donald Trump", "description": "Cloud Voice (Local)" },
+                ]
         
-        buffer = io.BytesIO()
-        import soundfile as sf
-        sf.write(buffer, fake_audios, 44100, format='wav')
-        wav_bytes = buffer.getvalue()
+        # Default TTS Task
+        text = job_input.get('text', '')
+        reference_id = job_input.get('reference_id', None)
+        chunk_length = job_input.get('chunk_length', 200) 
+        max_new_tokens = job_input.get('max_new_tokens', 1024)
+        top_p = job_input.get('top_p', 0.7)
+        repetition_penalty = job_input.get('repetition_penalty', 1.2)
+        temperature = job_input.get('temperature', 0.7)
+        seed = job_input.get('seed', None)
         
-        audio_base64 = base64.b64encode(wav_bytes).decode('utf-8')
-        
-        return {
-            "status": "success",
-            "audio_base64": audio_base64
-        }
-        
-    except Exception as e:
-        print(f"Inference Error: {e}")
-        return {"status": "error", "error": str(e)}
+        # NEW: Preprocess text for emotions
+        processed_text = preprocess_text(text)
+        print(f"Original Text: '{text[:30]}...' -> Processed: '{processed_text[:30]}...'")
+    
+        # NEW: Ensure reference audio is available on this worker
+        if reference_id:
+            ensure_references(reference_id)
+    
+        print(f"Processing TTS: Text='{processed_text[:20]}...', Voice='{reference_id}'")
+    
+        request = ServeTTSRequest(
+            text=processed_text,
+            references=[], 
+            reference_id=reference_id,
+            max_new_tokens=max_new_tokens,
+            chunk_length=chunk_length,
+            top_p=top_p,
+            repetition_penalty=repetition_penalty,
+            temperature=temperature,
+            seed=seed,
+            format="wav",
+            streaming=False
+        )
+    
+        try:
+            engine = manager.tts_inference_engine
+            fake_audios = next(inference(request, engine))
+            
+            buffer = io.BytesIO()
+            import soundfile as sf
+            sf.write(buffer, fake_audios, 44100, format='wav')
+            wav_bytes = buffer.getvalue()
+            
+            audio_base64 = base64.b64encode(wav_bytes).decode('utf-8')
+            
+            return {
+                "status": "success",
+                "audio_base64": audio_base64
+            }
+            
+        except Exception as e:
+            print(f"Inference Error: {e}")
+            return {"status": "error", "error": str(e)}
+            
+    finally:
+        # SIGNAL BUSY END (Always clear, even on error)
+        IS_INFERENCE_BUSY.clear()
 
 runpod.serverless.start({"handler": handler})
