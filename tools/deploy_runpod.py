@@ -1,4 +1,3 @@
-
 import os
 import time
 import runpod
@@ -7,6 +6,17 @@ import json
 from botocore.exceptions import NoCredentialsError, ClientError
 
 # Configuration
+def load_env():
+    env_path = os.path.join(os.getcwd(), ".env")
+    if os.path.exists(env_path):
+        with open(env_path, "r") as f:
+            for line in f:
+                if "=" in line and not line.startswith("#"):
+                    key, value = line.strip().split("=", 1)
+                    os.environ[key] = value.strip('"').strip("'")
+
+load_env()
+
 RUNPOD_API_KEY = os.environ.get("RUNPOD_API_KEY")
 HF_TOKEN = os.environ.get("HF_TOKEN")
 
@@ -21,7 +31,7 @@ VOLUME_NAME = "fish-speech-volume"
 VOLUME_SIZE = 100 # GB
 GPU_TYPE_ID = "NVIDIA GeForce RTX 4090"
 DATA_CENTER_ID = "EU-RO-1" # Default if not detecting from endpoint
-IMAGE_NAME = "hoaitroc2212/fish-speech:v16.00"
+IMAGE_NAME = "hoaitroc2212/fish-speech:v16.01"
 
 if not RUNPOD_API_KEY:
     raise ValueError("Please set RUNPOD_API_KEY environment variable.")

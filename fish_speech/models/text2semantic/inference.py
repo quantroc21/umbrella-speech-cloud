@@ -34,6 +34,7 @@ torch._inductor.config.triton.unique_kernel_names = True
 if hasattr(torch._inductor.config, "fx_graph_cache"):
     # Experimental feature to reduce compilation times, will be on by default in future
     torch._inductor.config.fx_graph_cache = True
+    torch._dynamo.config.suppress_errors = True
 
 
 from torch.nn.attention import SDPBackend, sdpa_kernel
@@ -692,7 +693,7 @@ def load_model(checkpoint_path, device, precision, compile=False, is_agent=False
         logger.info("Compiling function...")
         decode_one_token = torch.compile(
             decode_one_token,
-            fullgraph=True,
+            fullgraph=False,
             backend="inductor" if torch.cuda.is_available() else "aot_eager",
             mode="reduce-overhead" if torch.cuda.is_available() else None,
         )
