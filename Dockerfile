@@ -8,11 +8,9 @@ WORKDIR /app
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
-# Persist compilation cache to the network volume
-ENV TORCHINDUCTOR_CACHE_DIR=/runpod-volume/.cache/torch
-ENV TRITON_CACHE_DIR=/runpod-volume/.cache/triton
+# Environment variables (Cache config handled dynamically in handler.py)
+ENV PYTHONUNBUFFERED=1
 ENV TORCHINDUCTOR_FX_GRAPH_CACHE=1
-RUN mkdir -p /runpod-volume/.cache/torch /runpod-volume/.cache/triton
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
