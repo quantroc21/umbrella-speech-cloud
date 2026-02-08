@@ -11,13 +11,61 @@ from tools.server.inference import inference_wrapper as inference
 from fish_speech.utils.schema import ServeTTSRequest, ServeReferenceAudio
 from huggingface_hub import snapshot_download
 
-# Configuration (Securely Load from RunPod Env)
-# --- v15.30: FORCE PERSISTENT COMPILATION CACHE ---
-# This ensures that once compiled (25s), the kernels are saved to the Network Volume.
-# Subsequent containers will load them instantly (<3s).
-os.environ["TORCHINDUCTOR_CACHE_DIR"] = "/runpod-volume/torch_compile_cache"
-os.environ["TORCHINDUCTOR_FX_GRAPH_CACHE"] = "1"
-os.makedirs("/runpod-volume/torch_compile_cache", exist_ok=True)
+import pathlib
+import tempfile
+import shutil
+
+# --- v15.43: ROBUST CACHE CONFIGURATION ---
+def configure_cache():
+    """
+    Configures Torch compilation cache with self-healing logic.
+    1. Tries to use Network Volume (/runpod-volume/.cache/torch).
+    2. Checks if writable.
+    3. Falls back to local ephemeral /tmp if volume is missing/broken.
+    """
+    # Align with tools/cache_sync.py: MOUNT_POINT / ".cache" / "torch"
+    volume_root = pathlib.Path("/runpod-volume")
+    target_cache_root = volume_root / ".cache"
+    
+    use_volume = False
+    
+    # Safety Check: Is volume mounted and writable?
+    if volume_root.exists():
+        try:
+            test_file = volume_root / ".write_test"
+            test_file.touch()
+            test_file.unlink()
+            use_volume = True
+        except Exception as e:
+            print(f"[Cache] WARNING: Network Volume exists but is NOT writable: {e}")
+    else:
+        print("[Cache] WARNING: Network Volume /runpod-volume NOT found.")
+
+    if use_volume:
+        cache_base = target_cache_root
+        print(f"[Cache] Success! Using Persistent Volume: {cache_base}")
+    else:
+        # Fallback to tmp
+        cache_base = pathlib.Path("/tmp/fish_speech_cache")
+        print(f"[Cache] FALLBACK: Using Ephemeral Cache: {cache_base}")
+
+    # Define Sub-Paths
+    torch_cache = cache_base / "torch"
+    triton_cache = cache_base / "triton"
+
+    # Create directories
+    torch_cache.mkdir(parents=True, exist_ok=True)
+    triton_cache.mkdir(parents=True, exist_ok=True)
+
+    # Set Env Vars (Must be strings)
+    os.environ["TORCHINDUCTOR_CACHE_DIR"] = str(torch_cache)
+    os.environ["TRITON_CACHE_DIR"] = str(triton_cache)
+    os.environ["TORCHINDUCTOR_FX_GRAPH_CACHE"] = "1"
+    
+    print(f"[Cache] TORCHINDUCTOR_CACHE_DIR = {os.environ['TORCHINDUCTOR_CACHE_DIR']}")
+
+# Execute Configuration Immediately
+configure_cache()
 # --------------------------------------------------
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
