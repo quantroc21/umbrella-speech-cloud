@@ -5,6 +5,7 @@ import sys
 import re
 from pathlib import Path
 from botocore.exceptions import NoCredentialsError
+from botocore.config import Config
 
 # Configuration
 MOUNT_POINT = Path("/runpod-volume")
@@ -21,67 +22,68 @@ def get_region_from_endpoint(endpoint):
     if not endpoint:
         return "us-east-1"
     
-    # Check for RunPod specific pattern
-    # Matches: s3api-eu-ro-1.runpod.io -> eu-ro-1
-    # Matches: s3api-us-east-1.runpod.io -> us-east-1
     match = re.search(r"s3api-([a-z0-9-]+)\.runpod\.io", endpoint)
     if match:
         return match.group(1)
     
-    return "us-east-1" # Default fallback
+    return "us-east-1" 
 
 def get_s3_client():
     if not all([S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT, S3_BUCKET]):
-        print("[Sync] Missing S3 Network Credentials. Sync disabled.")
+        print("[Sync] Missing S3 Network Credentials. Sync disabled.", flush=True)
         return None
     
-    # CRITICAL FIX: Extract region or defaulting to us-east-1 causes AccessDenied
     region = get_region_from_endpoint(S3_ENDPOINT)
-    print(f"[Sync] Connecting to S3 Endpoint: {S3_ENDPOINT} (Region: {region})")
+    print(f"[Sync] Connecting to S3 Endpoint: {S3_ENDPOINT} (Region: {region})", flush=True)
+
+    # TIMEOUT CONFIG: Fail fast if network is dead
+    config = Config(
+        connect_timeout=10, 
+        read_timeout=60,
+        retries={'max_attempts': 3}
+    )
 
     return boto3.client(
         "s3",
         aws_access_key_id=S3_ACCESS_KEY,
         aws_secret_access_key=S3_SECRET_KEY,
         endpoint_url=S3_ENDPOINT,
-        region_name=region
+        region_name=region,
+        config=config
     )
 
 def download_dir(client, prefix, local_dir):
-    """Download s3://bucket/prefix to local_dir"""
     paginator = client.get_paginator('list_objects_v2')
     try:
+        # Check if bucket is accessible first
+        print(f"[Sync] I am about to list objects in bucket '{S3_BUCKET}' with prefix '{prefix}'...", flush=True)
+        
         for result in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
             if 'Contents' not in result:
                 continue
                 
             for obj in result['Contents']:
                 key = obj['Key']
-                # Skip if directory placeholder
                 if key.endswith('/'):
                     continue
                     
                 rel_path = key[len(prefix):].lstrip('/')
                 local_path = local_dir / rel_path
                 
-                # Skip if local file is newer/same size
                 if local_path.exists():
                     if local_path.stat().st_size == obj['Size']:
-                        continue # Simple size check for speed
+                        continue 
                 
-                # Download
                 local_path.parent.mkdir(parents=True, exist_ok=True)
-                print(f"[Sync] Downloading {key} -> {local_path}")
+                print(f"[Sync] Downloading {key} -> {local_path}", flush=True)
                 try:
                     client.download_file(S3_BUCKET, key, str(local_path))
                 except Exception as e:
-                    print(f"[Sync] Error downloading {key}: {e}")
+                    print(f"[Sync] Error downloading {key}: {e}", flush=True)
     except Exception as e:
-        # If bucket is empty or access denied (though client creation should catch generic auth issues)
-        print(f"[Sync] Warning listing objects: {e}")
+        print(f"[Sync] Error listing objects (Is bucket empty or access denied?): {e}", flush=True)
 
 def upload_dir(client, local_dir, prefix):
-    """Upload local_dir to s3://bucket/prefix"""
     if not local_dir.exists():
         return
 
@@ -89,45 +91,41 @@ def upload_dir(client, local_dir, prefix):
         for file in files:
             local_path = Path(root) / file
             rel_path = local_path.relative_to(local_dir)
-            s3_key = f"{prefix}/{rel_path}".replace("\\", "/") # Ensure forward slashes
+            s3_key = f"{prefix}/{rel_path}".replace("\\", "/") 
             
-            # Upload
             try:
                 client.upload_file(str(local_path), S3_BUCKET, s3_key)
             except Exception as e:
-                print(f"[Sync] Error uploading {local_path}: {e}")
+                print(f"[Sync] Error uploading {local_path}: {e}", flush=True)
 
 def restore():
     client = get_s3_client()
     if not client: return
 
-    print("[Sync] Restoring cache from S3...")
-    # Assume S3 structure mirrors local: .cache/torch -> s3://bucket/.cache/torch
+    print("[Sync] Restoring cache from S3...", flush=True)
     download_dir(client, ".cache/torch", MOUNT_POINT / ".cache" / "torch")
     download_dir(client, ".cache/triton", MOUNT_POINT / ".cache" / "triton")
-    print("[Sync] Restore complete.")
+    print("[Sync] Restore complete.", flush=True)
 
 def backup():
     client = get_s3_client()
     if not client: return
 
-    # print("[Sync] Backing up cache to S3...") 
-    # Use quiet backup to not spam logs
     upload_dir(client, MOUNT_POINT / ".cache" / "torch", ".cache/torch")
     upload_dir(client, MOUNT_POINT / ".cache" / "triton", ".cache/triton")
 
 def monitor():
-    print("[Sync] Starting Background Sync Monitor (Every 60s)...")
+    print("[Sync] Starting Background Sync Monitor (Every 60s)...", flush=True)
     while True:
         time.sleep(60)
         try:
             backup()
         except Exception as e:
-            print(f"[Sync] Backup failed: {e}")
+            print(f"[Sync] Backup failed: {e}", flush=True)
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python cache_sync.py [restore|monitor]")
+        print("Usage: python cache_sync.py [restore|monitor]", flush=True)
         sys.exit(1)
         
     mode = sys.argv[1]
@@ -136,4 +134,4 @@ if __name__ == "__main__":
     elif mode == "monitor":
         monitor()
     else:
-        print(f"Unknown mode: {mode}")
+        print(f"Unknown mode: {mode}", flush=True)

@@ -10,10 +10,10 @@ if [[ -n "$S3_ACCESS_KEY_ID_NETWORK" && -n "$S3_SECRET_ACCESS_KEY_NETWORK" ]]; t
     echo "Starting Python Cache Sync..."
     
     # 1. Restore Cache (Blocking - wait for it before starting inference)
-    python tools/cache_sync.py restore
+    python -u tools/cache_sync.py restore
     
     # 2. Start Background Monitor (Syncs new files to S3 every 60s)
-    python tools/cache_sync.py monitor &
+    python -u tools/cache_sync.py monitor &
     
 else
     echo "WARNING: S3 Network Credentials not found. Cache will NOT persist."
