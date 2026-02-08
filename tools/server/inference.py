@@ -1,6 +1,7 @@
 from http import HTTPStatus
 
 import numpy as np
+import torch
 from kui.asgi import HTTPException
 
 from fish_speech.inference_engine import TTSInferenceEngine

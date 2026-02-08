@@ -107,8 +107,9 @@ def backup():
     try:
         # Create tarball of .cache directory, relative to MOUNT_POINT
         # tar -czf /tmp/archive.tar.gz -C /runpod-volume .cache
+        # Added --ignore-failed-read to prevent crash if torch deletes a temp file during read
         subprocess.run(
-            ["tar", "-czf", str(LOCAL_ARCHIVE_PATH), "-C", str(MOUNT_POINT), ".cache"],
+            ["tar", "--ignore-failed-read", "-czf", str(LOCAL_ARCHIVE_PATH), "-C", str(MOUNT_POINT), ".cache"],
             check=True
         )
         

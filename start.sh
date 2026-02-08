@@ -12,8 +12,7 @@ if [[ -n "$S3_ACCESS_KEY_ID_NETWORK" && -n "$S3_SECRET_ACCESS_KEY_NETWORK" ]]; t
     # 1. Restore Cache (Blocking - wait for it before starting inference)
     python -u tools/cache_sync.py restore
     
-    # 2. Start Background Monitor (Syncs new files to S3 every 60s)
-    python -u tools/cache_sync.py monitor &
+    # 2. Background Monitor is now handled inside handler.py to avoid race conditions
     
 else
     echo "WARNING: S3 Network Credentials not found. Cache will NOT persist."
