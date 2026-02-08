@@ -29,15 +29,26 @@ def configure_cache():
     
     use_volume = False
     
-    # Safety Check: Is volume mounted and writable?
+    # Safety Check: Is volume mounted?
+    # We check if it exists AND is a mount point (or at least valid directory not created by us)
     if volume_root.exists():
+        # Check 1: Is it a mount point? (Best for Linux/Docker)
+        is_mount = os.path.ismount(volume_root)
+        
+        # Check 2: Write test
+        is_writable = False
         try:
             test_file = volume_root / ".write_test"
             test_file.touch()
             test_file.unlink()
-            use_volume = True
-        except Exception as e:
-            print(f"[Cache] WARNING: Network Volume exists but is NOT writable: {e}")
+            is_writable = True
+        except Exception:
+            pass
+            
+        if is_mount or is_writable:
+             use_volume = True
+        else:
+             print(f"[Cache] WARNING: /runpod-volume exists but looks like a local folder (IsMount={is_mount}, Writable={is_writable}).")
     else:
         print("[Cache] WARNING: Network Volume /runpod-volume NOT found.")
 

@@ -3,7 +3,7 @@ set -e
 
 # Define mount point
 MOUNT_POINT="/runpod-volume"
-mkdir -p "$MOUNT_POINT"
+# mkdir -p "$MOUNT_POINT" -> Removed to prevent fake volume creation -> Removed to prevent fake volume creation
 
 # Check if S3 credentials are provided (Using _NETWORK suffix)
 if [[ -n "$S3_ACCESS_KEY_ID_NETWORK" && -n "$S3_SECRET_ACCESS_KEY_NETWORK" ]]; then
