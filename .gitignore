@@ -35,3 +35,6 @@ project_src.zip
 **/.env
 **/.env.*
 *.key
+aot_cache/
+**/aot_cache
+tools/aot_cache/

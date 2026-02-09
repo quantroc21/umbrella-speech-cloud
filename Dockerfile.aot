@@ -1,0 +1,58 @@
+# Base image matches baseline
+FROM pytorch/pytorch:2.4.1-cuda12.4-cudnn9-devel
+
+WORKDIR /app
+
+# Environment Variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+# --- AOT CACHE CONFIGURATION ---
+# We bake the cache into the image at /app/aot_cache
+ENV TORCHINDUCTOR_CACHE_DIR=/app/aot_cache
+ENV TRITON_CACHE_DIR=/app/aot_cache/triton
+ENV TORCHINDUCTOR_FX_GRAPH_CACHE=1
+RUN mkdir -p /app/aot_cache
+
+# Upgrade System Dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libsndfile1 \
+    ca-certificates \
+    git \
+    build-essential \
+    python3-dev \
+    portaudio19-dev \
+    libasound2-dev \
+    cmake \
+    pkg-config \
+    ninja-build \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install UV
+RUN pip install --no-cache-dir uv
+
+# Copy Project
+COPY . .
+
+# Install Python Deps
+ENV MAX_JOBS=4
+RUN uv pip install --system --no-cache setuptools setuptools-scm wheel ninja packaging
+RUN uv pip install --system --no-cache .
+RUN uv pip install --system --no-cache runpod "vector-quantize-pytorch==1.14.24" soundfile huggingface-hub boto3
+
+# Flash Attention (Targeting RTX 4090)
+ENV TORCH_CUDA_ARCH_LIST="8.9"
+RUN pip install --no-cache-dir flash-attn --no-build-isolation
+
+# --- COMPILE TIME ---
+# 1. Download Models
+RUN python tools/download_models.py
+
+# 2. Trigger AOT Compilation
+# THIS STEP REQUIRES A GPU DURING BUILD.
+# The kernel cache will be generated in /app/aot_cache
+RUN python tools/compile_model.py
+
+# --- RUNTIME ---
+CMD [ "python", "-u", "handler_aot.py" ]
