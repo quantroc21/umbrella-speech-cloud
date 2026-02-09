@@ -34,22 +34,5 @@ files_1 = [
     "firefly-gan-vq-fsq-8x1024-21hz-generator.pth",
 ]
 
-# 3rd
-repo_id_3 = "fishaudio/fish-speech-1"
-local_dir_3 = "./"
-files_3 = [
-    "ffmpeg.exe",
-    "ffprobe.exe",
-]
-
-# 4th
-repo_id_4 = "SpicyqSama007/fish-speech-packed"
-local_dir_4 = "./"
-files_4 = [
-    "asr-label-win-x64.exe",
-]
-
 check_and_download_files(repo_id_1, files_1, local_dir_1)
 
-check_and_download_files(repo_id_3, files_3, local_dir_3)
-check_and_download_files(repo_id_4, files_4, local_dir_4)

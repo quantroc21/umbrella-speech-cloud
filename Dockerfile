@@ -1,64 +1,49 @@
-
-# v13.9: Highly Robust Build using UV and standardized dependencies
+# Task 1: Baseline Restoration (Minimal Image, No Volume, Standard PyTorch)
+# Base Image: Official PyTorch (contains CUDA/CuDNN)
 FROM pytorch/pytorch:2.4.1-cuda12.4-cudnn9-devel
 
 # Set working directory
 WORKDIR /app
 
-# Set environment variables
+# Environment variables
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
-# Environment variables (Cache config handled dynamically in handler.py)
-ENV PYTHONUNBUFFERED=1
-ENV TORCHINDUCTOR_FX_GRAPH_CACHE=1
+ENV MAX_JOBS=4
 
-# Install system dependencies
+# Install system dependencies (Minimal)
+# ffmpeg: needed for audio processing (librosa/soundfile)
+# git: needed for pip install from git
+# build-essential: needed for compiling some python extensions
 RUN apt-get update && apt-get install -y \
     ffmpeg \
-    libsndfile1 \
-    ca-certificates \
     git \
     build-essential \
-    python3-dev \
-    portaudio19-dev \
-    libasound2-dev \
-    cmake \
-    pkg-config \
-    ninja-build \
-    s3fs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install UV for faster and more reliable python package management
+# Install UV for faster pip
 RUN pip install --no-cache-dir uv
 
-# Copy the entire project code
+# Copy only requirements first to leverage caching (if we had a requirements.txt, but we use pyproject.toml usually)
 COPY . .
 
 # Install Python dependencies using UV
-# 1. Install build-time requirements first
-# 2. Install the project WITHOUT the [stable] extra to preserve base image Torch
-# 3. Explicitly include runpod and the vq-pytorch fix
-# Limit compilation threads to prevent OOM on GitHub Runners
-ENV MAX_JOBS=2
+# - Install project in editable mode or just install deps
+RUN uv pip install --system --no-cache setuptools wheel ninja packaging
 
-# Install Python build dependencies
-RUN uv pip install --system --no-cache setuptools setuptools-scm wheel ninja packaging
-
-# Install Project
+# Install Project Deps
 RUN uv pip install --system --no-cache .
 
-# Install Runtime Deps
-RUN uv pip install --system --no-cache runpod "vector-quantize-pytorch==1.14.24" soundfile huggingface-hub boto3
+# Install Runtime Deps (RunPod SDK, etc)
+RUN uv pip install --system --no-cache runpod soundfile huggingface-hub boto3
 
-# Install Flash Attention (Separate step, using standard pip for safety)
+# Install Flash Attention (Critical for 260t/s)
 RUN pip install --no-cache-dir flash-attn --no-build-isolation
 
-# Pre-download models to bake them into the image (Fast Cold Start)
-# RUN python tools/download_models.py -> Removed for v15.9 (Network Based / Cached)
+# Task 1 Requirement: Bake models into image (NO network volume)
+RUN python tools/download_models.py
 
-# Final check for permissions (optional but safe)
-RUN chmod +x entrypoint.sh || true
+# Define Environment Variable for Checkpoint
+ENV CHECKPOINT_DIR=/app/checkpoints/fish-speech-1.5
 
-# Define the entrypoint
-# Run the startup script (Handles S3 mounting + Inference)
-CMD [ "bash", "start.sh" ]
+# Runtime Entrypoint
+CMD [ "python", "-u", "handler.py" ]
