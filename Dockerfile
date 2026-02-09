@@ -1,49 +1,40 @@
-# Task 1: Baseline Restoration (Minimal Image, No Volume, Standard PyTorch)
-# Base Image: Official PyTorch (contains CUDA/CuDNN)
+
+# Task 1: Baseline Restoration (v17.01) - Performance Fix
+# Using same base, but ensuring Flash Attention is correctly built
 FROM pytorch/pytorch:2.4.1-cuda12.4-cudnn9-devel
 
-# Set working directory
 WORKDIR /app
 
-# Environment variables
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV MAX_JOBS=4
 
-# Install system dependencies (Minimal)
-# ffmpeg: needed for audio processing (librosa/soundfile)
-# git: needed for pip install from git
-# build-essential: needed for compiling some python extensions
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     git \
     build-essential \
+    cmake \
     && rm -rf /var/lib/apt/lists/*
 
-# Install UV for faster pip
+# Install UV
 RUN pip install --no-cache-dir uv
 
-# Copy only requirements first to leverage caching (if we had a requirements.txt, but we use pyproject.toml usually)
 COPY . .
 
-# Install Python dependencies using UV
-# - Install project in editable mode or just install deps
+# Install dependencies
 RUN uv pip install --system --no-cache setuptools wheel ninja packaging
-
-# Install Project Deps
 RUN uv pip install --system --no-cache .
-
-# Install Runtime Deps (RunPod SDK, etc)
 RUN uv pip install --system --no-cache runpod soundfile huggingface-hub boto3
 
-# Install Flash Attention (Critical for 260t/s)
+# FORCE Flash Attention with proper flags for Ada Lovelace (sm_89)
+# This is critical for the 260t/s speed on RTX 4090
+ENV TORCH_CUDA_ARCH_LIST="8.9"
 RUN pip install --no-cache-dir flash-attn --no-build-isolation
 
-# Task 1 Requirement: Bake models into image (NO network volume)
+# Bake models
 RUN python tools/download_models.py
 
-# Define Environment Variable for Checkpoint
 ENV CHECKPOINT_DIR=/app/checkpoints/fish-speech-1.5
 
-# Runtime Entrypoint
 CMD [ "python", "-u", "handler.py" ]

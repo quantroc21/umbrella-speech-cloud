@@ -26,12 +26,15 @@ S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY_ID_NETWORK") or os.environ.get("RU
 S3_SECRET_KEY = os.environ.get("S3_SECRET_ACCESS_KEY_NETWORK") or os.environ.get("RUNPOD_S3_SECRET_KEY")
 S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL_NETWORK", "https://s3api-eu-ro-1.runpod.io") 
 
+# Existing Endpoint Support
+EXISTING_ENDPOINT_ID = os.environ.get("EXISTING_ENDPOINT_ID", "vliov4h1a58iwu")
+
 # Fallbacks for creation
 VOLUME_NAME = "fish-speech-volume"
 VOLUME_SIZE = 100 # GB
 GPU_TYPE_ID = "NVIDIA GeForce RTX 4090"
 DATA_CENTER_ID = "EU-RO-1" # Default if not detecting from endpoint
-IMAGE_NAME = "hoaitroc2212/fish-speech:v16.01"
+IMAGE_NAME = "hoaitroc2212/fish-speech:v17.01-restore"
 
 if not RUNPOD_API_KEY:
     raise ValueError("Please set RUNPOD_API_KEY environment variable.")
@@ -198,31 +201,61 @@ def create_template():
 
 def deploy_endpoint(volume_id, dc_id):
     """
-    Phase 3b: Deploy Serverless Endpoint using SDK.
+    Phase 3b: Deploy or Update Serverless Endpoint.
     """
     template_id = create_template()
     if not template_id:
         return None
 
-    log(f"Deploying Endpoint via SDK (Template: {template_id}, Volume: {volume_id})...")
-    
-    try:
-        endpoint = runpod.create_endpoint(
-            name="fish-speech-serverless",
-            template_id=template_id,
-            gpu_ids=GPU_TYPE_ID, # SDK expects string
-            network_volume_id=volume_id,
-            locations=dc_id,
-            workers_min=0,
-            workers_max=1,
-            idle_timeout=60
-        )
-        endpoint_id = endpoint['id']
-        log(f"Endpoint Created: {endpoint_id}")
-        return {'id': endpoint_id}
-    except Exception as e:
-        log(f"Deployment Failed: {e}")
-        return None
+    if EXISTING_ENDPOINT_ID:
+        log(f"Updating Existing Endpoint {EXISTING_ENDPOINT_ID} via GraphQL...")
+        query = """
+        mutation saveEndpoint($input: EndpointInput!) {
+            saveEndpoint(input: $input) {
+                id
+                name
+            }
+        }
+        """
+        endpoint_input = {
+            "id": EXISTING_ENDPOINT_ID,
+            "name": "fish-speech-serverless",
+            "templateId": template_id,
+            "gpuIds": GPU_TYPE_ID,
+            "networkVolumeId": volume_id,
+            "locations": dc_id,
+            "workersMin": 0,
+            "workersMax": 1,
+            "idleTimeout": 60
+        }
+        try:
+            log(f"Sending Update Input: {json.dumps(endpoint_input, indent=2)}")
+            result = execute_graphql(query, {"input": endpoint_input})
+            endpoint_id = result['data']['saveEndpoint']['id']
+            log(f"Endpoint Updated: {endpoint_id}")
+            return {'id': endpoint_id}
+        except Exception as e:
+            log(f"Update Failed: {e}")
+            return None
+    else:
+        log(f"Deploying New Endpoint via SDK (Template: {template_id}, Volume: {volume_id})...")
+        try:
+            endpoint = runpod.create_endpoint(
+                name="fish-speech-serverless",
+                template_id=template_id,
+                gpu_ids=GPU_TYPE_ID,
+                network_volume_id=volume_id,
+                locations=dc_id,
+                workers_min=0,
+                workers_max=1,
+                idle_timeout=60
+            )
+            endpoint_id = endpoint['id']
+            log(f"Endpoint Created: {endpoint_id}")
+            return {'id': endpoint_id}
+        except Exception as e:
+            log(f"Deployment Failed: {e}")
+            return None
 
 def warm_up(endpoint_id):
     """
