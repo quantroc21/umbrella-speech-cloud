@@ -287,20 +287,19 @@ def decode_one_token_ar(
 
     # Fast Transformer Loop (Compiled Region)
     # We pass explicit tensors to ensure the graph is captured correctly.
-    # hidden_states is updated in place in the loop in the original, but here we return the full list.
+    # hidden_states is updated in place in the loop, but we pass it as arg.
     fast_codebooks = _fast_decode_loop(
         model, 
         hidden_states, 
+        codebooks[0], # The semantic token
+        model.tokenizer.semantic_begin_id,
         previous_tokens, 
         sampling_kwargs
     )
     
-    # fast_codebooks is already a stacked tensor of shape (num_codebooks-1, ...)
-    # We need to combine it with the first codebook `codebooks[0]`
-    
-    # logic to reconstruct the full list of codebooks
-    # The original code appended to a list.
-    # _fast_decode_loop should return the stacked tensor of the *new* codebooks.
+    # fast_codebooks is now shape [8, ...] (Acoustic 0-7)
+    # codebooks[0] is Semantic Token
+    # result is [Semantic, Acoustic 0-7] = 9 tokens
     
     final_codebooks = torch.cat([codebooks[0][None, ...], fast_codebooks], dim=0)
 
@@ -317,18 +316,36 @@ def decode_one_token_ar(
 def _fast_decode_loop(
     model, 
     hidden_states: torch.Tensor, 
+    initial_codebook: torch.Tensor,
+    semantic_begin_id: int,
     previous_tokens: torch.Tensor = None, 
     sampling_kwargs: dict = None
 ) -> torch.Tensor:
     """
     Surgical compilation region for the Fast Transformer loop.
-    This function generates codebooks 1 to N-1.
+    Generates Acoustic Tokens 0 to 7 (8 tokens).
+    1. Updates cache for Pos 0.
+    2. Converts Semantic(C0) -> Acoustic(C0).
+    3. Generates C1..C7.
     """
     new_codebooks = []
     
     if sampling_kwargs is None:
         sampling_kwargs = {}
 
+    # Step 1: Update cache for Position 0 (Semantic Token)
+    # We must run this to populate the KV cache, even if we don't use the logits directly yet.
+    input_pos = torch.tensor([0], device=hidden_states.device, dtype=torch.long)
+    model.forward_generate_fast(hidden_states, input_pos)
+
+    # Step 2: Convert Semantic Token to First Acoustic Token (C0)
+    a = initial_codebook - semantic_begin_id
+    a = torch.clamp(a, min=0) # Safety
+    
+    hidden_states = model.fast_embeddings(a)
+    new_codebooks.append(a)
+
+    # Step 3: Iterate for C1 to C7
     for codebook_idx in range(1, model.config.num_codebooks):
         input_pos = torch.tensor(
             [codebook_idx], device=hidden_states.device, dtype=torch.long
