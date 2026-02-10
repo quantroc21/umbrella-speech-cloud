@@ -333,10 +333,13 @@ def _fast_decode_loop(
     if sampling_kwargs is None:
         sampling_kwargs = {}
 
+    device = hidden_states.device
+    
     # Step 1: Update cache for Position 0 (Semantic Token)
     # We must run this to populate the KV cache, even if we don't use the logits directly yet.
-    input_pos = torch.tensor([0], device=hidden_states.device, dtype=torch.long)
-    model.forward_generate_fast(hidden_states, input_pos)
+    # We use a persistent tensor for pos 0 to avoid symbolic shape issues if possible.
+    input_pos_zero = torch.tensor([0], device=device, dtype=torch.long)
+    model.forward_generate_fast(hidden_states, input_pos_zero)
 
     # Step 2: Convert Semantic Token to First Acoustic Token (C0)
     a = initial_codebook - semantic_begin_id
@@ -345,10 +348,16 @@ def _fast_decode_loop(
     hidden_states = model.fast_embeddings(a)
     new_codebooks.append(a)
 
+    # Pre-compute input positions for the loop to minimize tensor creation overhead/graph breaks
+    # range is 1 to 7 (inclusive of 1, exclusive of 8) -> [1, 2, 3, 4, 5, 6, 7]
+    # We can iterate over this tensor or just use python loop with pre-allocated scalar tensors?
+    # Using python loop is better for the graph unrolling if num_codebooks is constant.
+    # But creating tensors inside loop is what we want to avoid for "xindex" warnings sometimes.
+    
     # Step 3: Iterate for C1 to C7
     for codebook_idx in range(1, model.config.num_codebooks):
         input_pos = torch.tensor(
-            [codebook_idx], device=hidden_states.device, dtype=torch.long
+            [codebook_idx], device=device, dtype=torch.long
         )
         logits = model.forward_generate_fast(hidden_states, input_pos)
         

@@ -118,11 +118,12 @@ class ModelManager:
         
         warmup_configs = [
             # Variant 1: Neutral (Standard path)
+            # Text: "Hello world, this is a test voice."
             ServeTTSRequest(
-                text="Hello world.",
+                text="Hello world, this is a test voice.",
                 references=[],
                 reference_id=None,
-                max_new_tokens=4, # Just enough to trigger the fast loop approx 4 times
+                max_new_tokens=50, # Sufficient for 1 sentence
                 chunk_length=0,
                 top_p=0.7,
                 repetition_penalty=1.2,
@@ -130,14 +131,12 @@ class ModelManager:
                 format="wav",
             ),
             # Variant 2: Happy (Emotion path coverage)
-            # We use a prompt text that implies happiness if no reference is provided, 
-            # or rely on the fact that different inputs might trigger different shapes if dynamic=True wasn't perfect.
-            # But mainly this doubles as a stress test.
+            # Text: "I am so happy today!"
             ServeTTSRequest(
-                text="I am so happy!",
+                text="I am so happy today!",
                 references=[],
                 reference_id=None,
-                max_new_tokens=4, 
+                max_new_tokens=50, 
                 chunk_length=0,
                 top_p=0.7,
                 repetition_penalty=1.2,
