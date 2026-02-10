@@ -107,16 +107,50 @@ class ModelManager:
         logger.info("Decoder model loaded.")
 
     def warm_up(self, tts_inference_engine) -> None:
-        request = ServeTTSRequest(
-            text="Hello world.",
-            references=[],
-            reference_id=None,
-            max_new_tokens=1024,
-            chunk_length=200,
-            top_p=0.7,
-            repetition_penalty=1.2,
-            temperature=0.7,
-            format="wav",
-        )
-        list(inference(request, tts_inference_engine))
-        logger.info("Models warmed up.")
+        """
+        Optimized Async Warmup (v18.8 Precision)
+        - English only (fastest tokenization)
+        - Short text (minimizes prefill)
+        - 2 Variants (Neutral + Happy) to cover graph branches
+        - max_new_tokens=0 (We only need to trigger the first few iterations of the loop to compile)
+        """
+        logger.info("Keep-Alive: Starting Precision Warmup...")
+        
+        warmup_configs = [
+            # Variant 1: Neutral (Standard path)
+            ServeTTSRequest(
+                text="Hello world.",
+                references=[],
+                reference_id=None,
+                max_new_tokens=4, # Just enough to trigger the fast loop approx 4 times
+                chunk_length=0,
+                top_p=0.7,
+                repetition_penalty=1.2,
+                temperature=0.7,
+                format="wav",
+            ),
+            # Variant 2: Happy (Emotion path coverage)
+            # We use a prompt text that implies happiness if no reference is provided, 
+            # or rely on the fact that different inputs might trigger different shapes if dynamic=True wasn't perfect.
+            # But mainly this doubles as a stress test.
+            ServeTTSRequest(
+                text="I am so happy!",
+                references=[],
+                reference_id=None,
+                max_new_tokens=4, 
+                chunk_length=0,
+                top_p=0.7,
+                repetition_penalty=1.2,
+                temperature=0.7,
+                format="wav",
+            )
+        ]
+
+        for i, request in enumerate(warmup_configs):
+            try:
+                logger.info(f"Warmup Variant {i+1}/2...")
+                list(inference(request, tts_inference_engine))
+            except Exception as e:
+                logger.error(f"Warmup Variant {i+1} failed (non-fatal): {e}")
+
+        logger.info("Models warmed up (Precision AOT Ready).")

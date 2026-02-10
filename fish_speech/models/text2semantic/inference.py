@@ -285,31 +285,71 @@ def decode_one_token_ar(
     hidden_states = model.fast_embeddings(a)
     codebooks.append(a)
 
-    for codebook_idx in range(1, model.config.num_codebooks):
-        input_pos = torch.tensor(
-            [codebook_idx], device=hidden_states.device, dtype=torch.long
-        )
-        logits = model.forward_generate_fast(hidden_states, input_pos)
-        a = sample(
-            logits,
-            previous_tokens=(
-                previous_tokens[codebook_idx + 1]
-                if previous_tokens is not None
-                else None
-            ),
-            **sampling_kwargs,
-        )[0]
-        hidden_states = model.fast_embeddings(a)
-        codebooks.append(a)
+    # Fast Transformer Loop (Compiled Region)
+    # We pass explicit tensors to ensure the graph is captured correctly.
+    # hidden_states is updated in place in the loop in the original, but here we return the full list.
+    fast_codebooks = _fast_decode_loop(
+        model, 
+        hidden_states, 
+        previous_tokens, 
+        sampling_kwargs
+    )
+    
+    # fast_codebooks is already a stacked tensor of shape (num_codebooks-1, ...)
+    # We need to combine it with the first codebook `codebooks[0]`
+    
+    # logic to reconstruct the full list of codebooks
+    # The original code appended to a list.
+    # _fast_decode_loop should return the stacked tensor of the *new* codebooks.
+    
+    final_codebooks = torch.cat([codebooks[0][None, ...], fast_codebooks], dim=0)
 
-    codebooks = torch.stack(codebooks, dim=0)
     # semantic_ids_tensor = torch.tensor(semantic_ids, device=codebooks.device)
     # codebooks[1:, :] = torch.masked_fill(
     #     codebooks[1:, :], ~torch.isin(codebooks[:1, :], semantic_ids_tensor), CODEBOOK_PAD_TOKEN_ID
     # )
 
     # print(codebooks)
-    return codebooks
+    return final_codebooks
+
+
+@torch.compile(mode="max-autotune", dynamic=True)
+def _fast_decode_loop(
+    model, 
+    hidden_states: torch.Tensor, 
+    previous_tokens: torch.Tensor = None, 
+    sampling_kwargs: dict = None
+) -> torch.Tensor:
+    """
+    Surgical compilation region for the Fast Transformer loop.
+    This function generates codebooks 1 to N-1.
+    """
+    new_codebooks = []
+    
+    if sampling_kwargs is None:
+        sampling_kwargs = {}
+
+    for codebook_idx in range(1, model.config.num_codebooks):
+        input_pos = torch.tensor(
+            [codebook_idx], device=hidden_states.device, dtype=torch.long
+        )
+        logits = model.forward_generate_fast(hidden_states, input_pos)
+        
+        # We need to handle previous_tokens slicing carefully
+        prev_tok = None
+        if previous_tokens is not None:
+             prev_tok = previous_tokens[codebook_idx + 1]
+
+        a = sample(
+            logits,
+            previous_tokens=prev_tok,
+            **sampling_kwargs,
+        )[0]
+        
+        hidden_states = model.fast_embeddings(a)
+        new_codebooks.append(a)
+
+    return torch.stack(new_codebooks, dim=0)
 
 
 def decode_one_token_naive(
@@ -691,14 +731,16 @@ def load_model(checkpoint_path, device, precision, compile=False, is_agent=False
         )
         logger.info("Using NaiveTransformer")
 
-    if compile:
-        logger.info("Compiling function...")
-        decode_one_token = torch.compile(
-            decode_one_token,
-            fullgraph=False,
-            backend="inductor" if torch.cuda.is_available() else "aot_eager",
-            mode="reduce-overhead" if torch.cuda.is_available() else None,
-        )
+    # Surgical compilation is now handled by _fast_decode_loop decorator.
+    # We do NOT compile the full decode_one_token function anymore.
+    # if compile:
+    #     logger.info("Compiling function...")
+    #     decode_one_token = torch.compile(
+    #         decode_one_token,
+    #         fullgraph=False,
+    #         backend="inductor" if torch.cuda.is_available() else "aot_eager",
+    #         mode="reduce-overhead" if torch.cuda.is_available() else None,
+    #     )
 
     return model.eval(), decode_one_token
 
