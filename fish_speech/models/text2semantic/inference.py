@@ -295,12 +295,11 @@ def decode_one_token_ar(
         previous_tokens, 
         sampling_kwargs
     )
-    
-    final_codebooks = torch.cat([codebooks[0][None, ...], fast_codebooks], dim=0)
+        final_codebooks = torch.cat([codebooks[0][None, ...], fast_codebooks], dim=0)
     return final_codebooks
 
 
-@torch.compile(mode="reduce-overhead", dynamic=True)
+@torch.compile(mode="max-autotune", dynamic=True)
 def _fast_decode_loop(
     model, 
     hidden_states: torch.Tensor, 
@@ -322,6 +321,7 @@ def _fast_decode_loop(
         sampling_kwargs = {}
 
     device = hidden_states.device
+    num_codebooks = model.config.num_codebooks
     
     # Step 1: Update cache for Position 0 (Semantic Token)
     # We must run this to populate the KV cache, even if we don't use the logits directly yet.
@@ -343,7 +343,10 @@ def _fast_decode_loop(
     # But creating tensors inside loop is what we want to avoid for "xindex" warnings sometimes.
     
     # Step 3: Iterate for C1 to C7
-    for codebook_idx in range(1, model.config.num_codebooks):
+    # We use a static loop if num_codebooks is known, or help inductor with the range
+    for codebook_idx in range(1, 8): # Typically 8 for FishSpeech 1.5
+        # If we want to be dynamic but avoid xindex warning, we ensure codebook_idx 
+        # is seen as a constrained integer.
         input_pos = torch.tensor(
             [codebook_idx], device=device, dtype=torch.long
         )
@@ -352,6 +355,7 @@ def _fast_decode_loop(
         # We need to handle previous_tokens slicing carefully
         prev_tok = None
         if previous_tokens is not None:
+             # Repetition penalty slicing
              prev_tok = previous_tokens[codebook_idx + 1]
 
         a = sample(

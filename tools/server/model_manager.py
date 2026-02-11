@@ -108,35 +108,33 @@ class ModelManager:
 
     def warm_up(self, tts_inference_engine) -> None:
         """
-        Optimized Async Warmup (v18.8 Precision)
+        Optimized Async Warmup (v18.12 Precision)
         - English only (fastest tokenization)
         - Short text (minimizes prefill)
-        - 2 Variants (Neutral + Happy) to cover graph branches
-        - max_new_tokens=0 (We only need to trigger the first few iterations of the loop to compile)
+        - 2 Variants (Neutral + Happy)
+        - Retry logic for shape stability
         """
-        logger.info("Keep-Alive: Starting Precision Warmup...")
+        logger.info("Keep-Alive: Starting Precision Warmup (v18.12)...")
         
         warmup_configs = [
-            # Variant 1: Neutral (Standard path)
-            # Text: "Hello world, this is a test voice."
+            # Variant 1: Neutral
             ServeTTSRequest(
                 text="Hello world, this is a test voice.",
                 references=[],
                 reference_id=None,
-                max_new_tokens=50, # Sufficient for 1 sentence
+                max_new_tokens=24, 
                 chunk_length=0,
                 top_p=0.7,
                 repetition_penalty=1.2,
                 temperature=0.7,
                 format="wav",
             ),
-            # Variant 2: Happy (Emotion path coverage)
-            # Text: "I am so happy today!"
+            # Variant 2: Happy
             ServeTTSRequest(
-                text="I am so happy today!",
+                text="I am happy today.",
                 references=[],
                 reference_id=None,
-                max_new_tokens=50, 
+                max_new_tokens=24, 
                 chunk_length=0,
                 top_p=0.7,
                 repetition_penalty=1.2,
@@ -146,10 +144,21 @@ class ModelManager:
         ]
 
         for i, request in enumerate(warmup_configs):
-            try:
-                logger.info(f"Warmup Variant {i+1}/2...")
-                list(inference(request, tts_inference_engine))
-            except Exception as e:
-                logger.error(f"Warmup Variant {i+1} failed (non-fatal): {e}")
+            success = False
+            for attempt in range(2):
+                try:
+                    logger.info(f"Warmup Variant {i+1}/2 (Attempt {attempt+1})...")
+                    list(inference(request, tts_inference_engine))
+                    success = True
+                    break
+                except Exception as e:
+                    logger.error(f"Warmup Variant {i+1} failed: {e}")
+                    if attempt == 0:
+                        logger.info("Retrying with neutral text-only fallback...")
+                        request.text = "Test retry."
+                        request.references = []
+                        request.reference_id = None
+                    else:
+                        logger.error(f"Warmup Variant {i+1} permanently failed.")
 
         logger.info("Models warmed up (Precision AOT Ready).")
