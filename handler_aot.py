@@ -128,7 +128,7 @@ def ensure_references(voice_id):
     except Exception as e:
         print(f"Failed to sync references for {voice_id}: {e}")
 
-print(f"--- INITIALIZING FISHSPEECH AOT HANDLER (v18.16) ---")
+print(f"--- INITIALIZING FISHSPEECH AOT HANDLER (v18.17) ---")
 print(f"Device: {DEVICE}")
 
 # Step 1: Ensure models are present on the volume
@@ -155,6 +155,13 @@ try:
         decoder_checkpoint_path=DECODER_CHECKPOINT
     )
     print(f"ModelManager Initialized via AOT ({time.time() - start_init:.2f}s).")
+    
+    # Step 3: Launch Async Warmup in background to avoid Initializing loop
+    import threading
+    warmup_thread = threading.Thread(target=manager.warm_up, args=(manager.tts_inference_engine,))
+    warmup_thread.daemon = True
+    warmup_thread.start()
+    print("Async Warmup started in background (Non-blocking).")
 except Exception as e:
     print(f"CRITICAL: Failed to initialize ModelManager: {e}")
     raise e
