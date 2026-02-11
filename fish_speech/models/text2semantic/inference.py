@@ -295,7 +295,8 @@ def decode_one_token_ar(
         previous_tokens, 
         sampling_kwargs
     )
-        final_codebooks = torch.cat([codebooks[0][None, ...], fast_codebooks], dim=0)
+    
+    final_codebooks = torch.cat([codebooks[0][None, ...], fast_codebooks], dim=0)
     return final_codebooks
 
 
@@ -311,9 +312,6 @@ def _fast_decode_loop(
     """
     Surgical compilation region for the Fast Transformer loop.
     Generates Acoustic Tokens 0 to 7 (8 tokens).
-    1. Updates cache for Pos 0.
-    2. Converts Semantic(C0) -> Acoustic(C0).
-    3. Generates C1..C7.
     """
     new_codebooks = []
     
@@ -321,42 +319,31 @@ def _fast_decode_loop(
         sampling_kwargs = {}
 
     device = hidden_states.device
-    num_codebooks = model.config.num_codebooks
     
     # Step 1: Update cache for Position 0 (Semantic Token)
-    # We must run this to populate the KV cache, even if we don't use the logits directly yet.
-    # We use a persistent tensor for pos 0 to avoid symbolic shape issues if possible.
     input_pos_zero = torch.tensor([0], device=device, dtype=torch.long)
     model.forward_generate_fast(hidden_states, input_pos_zero)
 
     # Step 2: Convert Semantic Token to First Acoustic Token (C0)
     a = initial_codebook - semantic_begin_id
-    a = torch.clamp(a, min=0) # Safety
+    a = torch.clamp(a, min=0) 
     
     hidden_states = model.fast_embeddings(a)
     new_codebooks.append(a)
 
-    # Pre-compute input positions for the loop to minimize tensor creation overhead/graph breaks
-    # range is 1 to 7 (inclusive of 1, exclusive of 8) -> [1, 2, 3, 4, 5, 6, 7]
-    # We can iterate over this tensor or just use python loop with pre-allocated scalar tensors?
-    # Using python loop is better for the graph unrolling if num_codebooks is constant.
-    # But creating tensors inside loop is what we want to avoid for "xindex" warnings sometimes.
-    
     # Step 3: Iterate for C1 to C7
-    # We use a static loop if num_codebooks is known, or help inductor with the range
-    for codebook_idx in range(1, 8): # Typically 8 for FishSpeech 1.5
-        # If we want to be dynamic but avoid xindex warning, we ensure codebook_idx 
-        # is seen as a constrained integer.
+    # Use static range to help compiler unroll and avoid symbolic shape issues
+    # FishSpeech 1.5 has 8 codebooks (0-7 acoustic).
+    for codebook_idx in range(1, 8):
         input_pos = torch.tensor(
             [codebook_idx], device=device, dtype=torch.long
         )
         logits = model.forward_generate_fast(hidden_states, input_pos)
         
-        # We need to handle previous_tokens slicing carefully
         prev_tok = None
-        if previous_tokens is not None:
-             # Repetition penalty slicing
-             prev_tok = previous_tokens[codebook_idx + 1]
+        if previous_tokens is not None and codebook_idx < previous_tokens.shape[0]:
+             # Penalize based on corresponding codebook token in history
+             prev_tok = previous_tokens[codebook_idx]
 
         a = sample(
             logits,

@@ -114,7 +114,7 @@ class ModelManager:
         - 2 Variants (Neutral + Happy)
         - Retry logic for shape stability
         """
-        logger.info("Keep-Alive: Starting Precision Warmup (v18.12)...")
+        logger.info("Keep-Alive: Starting Precision Warmup (v18.14)...")
         
         warmup_configs = [
             # Variant 1: Neutral
