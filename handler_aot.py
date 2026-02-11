@@ -48,8 +48,12 @@ def find_model_path(model_name):
     return None
 
 # Determine Checkpoint Directory
-# Priority: 1. Env Var, 2. RunPod Cache, 3. Local Fallback
-if os.getenv("CHECKPOINT_DIR"):
+# Priority: 1. Network Volume (Persistent), 2. RunPod Cache, 3. Local Fallback
+if os.path.exists("/runpod-volume"):
+    CHECKPOINT_DIR = "/runpod-volume/checkpoints/fish-speech-1.5"
+    os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+    print(f"Using Persistent Network Volume Checkpoint: {CHECKPOINT_DIR}")
+elif os.getenv("CHECKPOINT_DIR"):
     CHECKPOINT_DIR = os.getenv("CHECKPOINT_DIR")
     print(f"Using Configured Checkpoint: {CHECKPOINT_DIR}")
 else:
@@ -124,7 +128,7 @@ def ensure_references(voice_id):
     except Exception as e:
         print(f"Failed to sync references for {voice_id}: {e}")
 
-print(f"--- INITIALIZING FISHSPEECH AOT HANDLER ---")
+print(f"--- INITIALIZING FISHSPEECH AOT HANDLER (v18.16) ---")
 print(f"Device: {DEVICE}")
 
 # Step 1: Ensure models are present on the volume

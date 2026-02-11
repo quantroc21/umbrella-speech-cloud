@@ -113,7 +113,7 @@ class ModelManager:
         - 1 Variant (Neutral) to ensure stability
         - max_new_tokens=48 (Enough for 1 sentence)
         """
-        logger.info("Keep-Alive: Starting Precision Warmup (v18.15)...")
+        logger.info("Keep-Alive: Starting Precision Warmup (v18.16)...")
         
         warmup_request = ServeTTSRequest(
             text="Hello world, this is a test voice.",

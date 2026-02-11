@@ -246,7 +246,6 @@ def decode_one_token_naive_agent(
     return codebooks
 
 
-@torch.compile(mode="reduce-overhead", dynamic=True)
 def decode_one_token_ar(
     model: DualARTransformer,
     x: torch.Tensor,
