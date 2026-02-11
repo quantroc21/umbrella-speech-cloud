@@ -128,43 +128,46 @@ def ensure_references(voice_id):
     except Exception as e:
         print(f"Failed to sync references for {voice_id}: {e}")
 
-print(f"--- INITIALIZING FISHSPEECH AOT HANDLER (v18.17) ---")
+import threading
+
+READY_EVENT = threading.Event()
+manager = None
+
+def init_manager_background():
+    global manager
+    try:
+        start_init = time.time()
+        # Step 1: Ensure models are present on the volume (Inside thread to avoid blocking startup)
+        ensure_models()
+        
+        # Step 2: Initialize Model Manager
+        manager = ModelManager(
+            mode="tts",
+            device=DEVICE,
+            half=True, 
+            compile=True,  # FORCE Compilation (Should hit cache)
+            asr_enabled=False,
+            llama_checkpoint_path=CHECKPOINT_DIR,
+            decoder_config_name=DECODER_CONFIG,
+            decoder_checkpoint_path=DECODER_CHECKPOINT
+        )
+        print(f"ModelManager Initialized via AOT ({time.time() - start_init:.2f}s).")
+        
+        # Step 3: Warmup immediately after load
+        print("Starting warmup...")
+        manager.warm_up(manager.tts_inference_engine)
+        print("Warmup complete. signaling READY.")
+        
+        READY_EVENT.set()
+    except Exception as e:
+        print(f"CRITICAL: Failed to initialize ModelManager in background: {e}")
+
+print(f"--- INITIALIZING FISHSPEECH AOT HANDLER (v18.18-precision) ---")
 print(f"Device: {DEVICE}")
 
-# Step 1: Ensure models are present on the volume
-try:
-    ensure_models()
-except Exception as e:
-    print(f"FAILED to download/verify models: {e}")
-
-# Step 2: Define paths for ModelManager
-DECODER_CHECKPOINT = os.path.join(CHECKPOINT_DIR, "firefly-gan-vq-fsq-8x1024-21hz-generator.pth")
-DECODER_CONFIG = "firefly_gan_vq"
-
-# Initialize Model Manager Globally (Warm Start)
-try:
-    start_init = time.time()
-    manager = ModelManager(
-        mode="tts",
-        device=DEVICE,
-        half=True, 
-        compile=True,  # FORCE Compilation (Should hit cache)
-        asr_enabled=False,
-        llama_checkpoint_path=CHECKPOINT_DIR,
-        decoder_config_name=DECODER_CONFIG,
-        decoder_checkpoint_path=DECODER_CHECKPOINT
-    )
-    print(f"ModelManager Initialized via AOT ({time.time() - start_init:.2f}s).")
-    
-    # Step 3: Launch Async Warmup in background to avoid Initializing loop
-    import threading
-    warmup_thread = threading.Thread(target=manager.warm_up, args=(manager.tts_inference_engine,))
-    warmup_thread.daemon = True
-    warmup_thread.start()
-    print("Async Warmup started in background (Non-blocking).")
-except Exception as e:
-    print(f"CRITICAL: Failed to initialize ModelManager: {e}")
-    raise e
+# Start background initialization immediately
+threading.Thread(target=init_manager_background, daemon=True).start()
+print("Background initialization started. Pod reporting READY to RunPod...")
 
 def preprocess_text(text):
     """
@@ -208,6 +211,13 @@ def handler(job):
     """
     RunPod Handler for FishSpeech 1.5 (AOT Optimized)
     """
+    # WAIT for background initialization if it hasn't finished yet
+    if not READY_EVENT.is_set():
+        print("Job received but ModelManager not ready. Waiting for background initialization...")
+        if not READY_EVENT.wait(timeout=90):
+            return {"status": "error", "error": "Model initialization timed out (90s limit)."}
+        print("ModelManager ready. Proceeding with job.")
+
     job_input = job['input']
     task = job_input.get('task', 'tts')
 
