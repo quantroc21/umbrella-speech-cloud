@@ -286,8 +286,7 @@ def decode_one_token_ar(
     codebooks.append(a)
 
     # Fast Transformer Loop (Compiled Region)
-    # We pass explicit tensors to ensure the graph is captured correctly.
-    # hidden_states is updated in place in the loop, but we pass it as arg.
+    # logger.debug("Starting _fast_decode_loop...")
     fast_codebooks = _fast_decode_loop(
         model, 
         hidden_states, 
@@ -297,22 +296,11 @@ def decode_one_token_ar(
         sampling_kwargs
     )
     
-    # fast_codebooks is now shape [8, ...] (Acoustic 0-7)
-    # codebooks[0] is Semantic Token
-    # result is [Semantic, Acoustic 0-7] = 9 tokens
-    
     final_codebooks = torch.cat([codebooks[0][None, ...], fast_codebooks], dim=0)
-
-    # semantic_ids_tensor = torch.tensor(semantic_ids, device=codebooks.device)
-    # codebooks[1:, :] = torch.masked_fill(
-    #     codebooks[1:, :], ~torch.isin(codebooks[:1, :], semantic_ids_tensor), CODEBOOK_PAD_TOKEN_ID
-    # )
-
-    # print(codebooks)
     return final_codebooks
 
 
-@torch.compile(mode="max-autotune", dynamic=True)
+@torch.compile(mode="reduce-overhead", dynamic=True)
 def _fast_decode_loop(
     model, 
     hidden_states: torch.Tensor, 
