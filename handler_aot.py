@@ -125,7 +125,7 @@ def init_manager_background():
     except Exception as e:
         print(f"CRITICAL: Failed to initialize ModelManager in background: {e}")
 
-print(f"--- INITIALIZING FISHSPEECH AOT HANDLER (v18.19-precision) ---")
+print(f"--- INITIALIZING FISHSPEECH AOT HANDLER (v18.20-precision) ---")
 print(f"Device: {DEVICE}")
 
 # Start background initialization immediately
