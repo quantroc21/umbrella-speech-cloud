@@ -15,6 +15,18 @@ import torch._inductor.config
 from loguru import logger
 from tqdm import tqdm
 from transformers import AutoTokenizer
+import torch._inductor.lowering
+import torch._dynamo.config
+import torch._inductor.config
+
+# Fix FloatPow NameError in Inductor
+if "FloatPow" not in dir(torch._inductor.lowering):
+    try:
+        from torch._inductor.lowering import lowerings
+        if "pow" in lowerings:
+             torch._inductor.lowering.FloatPow = lowerings["pow"]
+    except:
+        pass
 
 from fish_speech.conversation import (
     CODEBOOK_PAD_TOKEN_ID,
@@ -246,7 +258,7 @@ def decode_one_token_naive_agent(
     return codebooks
 
 
-@torch.compile(mode="reduce-overhead")
+@torch.compile(mode="max-autotune", dynamic=True)
 def decode_one_token_ar(
     model: DualARTransformer,
     x: torch.Tensor,
@@ -838,9 +850,9 @@ def generate_long(
             if use_prompt:
                 partial_encoded = encoded_prompts + partial_encoded
 
-            cat_encoded = torch.cat(partial_encoded, dim=1)
-            prompt_length = cat_encoded.size(1)
-
+            # Add shape constraints to prevent symbolic_shapes warnings
+            torch._dynamo.mark_dynamic(cat_encoded, [1])
+            
             t0 = time.perf_counter()
             y = generate(
                 model=model,
