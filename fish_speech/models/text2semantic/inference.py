@@ -15,15 +15,6 @@ import torch._inductor.config
 from loguru import logger
 from tqdm import tqdm
 from transformers import AutoTokenizer
-try:
-    import torch._inductor.lowering
-    # Fix FloatPow NameError in Inductor
-    if "FloatPow" not in dir(torch._inductor.lowering):
-        from torch._inductor.lowering import lowerings
-        if "pow" in lowerings:
-             torch._inductor.lowering.FloatPow = lowerings["pow"]
-except Exception as e:
-    logger.warning(f"Failed to apply Inductor FloatPow shim: {e}")
 
 from fish_speech.conversation import (
     CODEBOOK_PAD_TOKEN_ID,
@@ -255,7 +246,6 @@ def decode_one_token_naive_agent(
     return codebooks
 
 
-@torch.compile(mode="max-autotune", dynamic=True)
 def decode_one_token_ar(
     model: DualARTransformer,
     x: torch.Tensor,
@@ -264,64 +254,62 @@ def decode_one_token_ar(
     previous_tokens: torch.Tensor = None,
     **sampling_kwargs,
 ) -> torch.Tensor:
-    """
-    Original FishSpeech AR Decoding logic (v18.15 RESTORED).
-    Restores quality and maintains >250 tokens/s speed.
-    """
-    # 1. Main Transformer Step
     x = model.forward_generate(x, input_pos)
-    logits = x.logits
-    hidden_states = x.hidden_states
 
-    # 2. Sample Semantic Token
-    # We use a lower temperature for the semantic token by default if not specified
-    # but for consistency with original, we follow sampling_kwargs
+    sampling_kwargs_main = sampling_kwargs.copy()
+    # sampling_kwargs_main["temperature"] = 0.1
+    # sampling_kwargs_main["top_p"] = 0.1
+    # sampling_kwargs_main["repetition_penalty"] = 1.0
+
     codebooks = [
         sample(
-            logits,
+            x.logits,
             previous_tokens=(
                 previous_tokens[0] if previous_tokens is not None else None
-            ),
-            **sampling_kwargs,
+            ),  # Disable repetition penalty for the token codebook
+            **sampling_kwargs_main,
         )[0]
     ]
 
-    # 3. Fast Transformer (VQ) Loop
-    # Cleanup the cache from previous step (Position 0 of the VQ)
+    hidden_states = x.hidden_states
+
+    # Cleanup the cache
     for layer in model.fast_layers:
         layer.attention.kv_cache.k_cache.fill_(0)
         layer.attention.kv_cache.v_cache.fill_(0)
 
-    # Convert Semantic -> First Acoustic (C0)
-    # This matches Pos 0 in the VQ Transformer
-    pos0 = torch.tensor([0], device=hidden_states.device, dtype=torch.long)
-    model.forward_generate_fast(hidden_states, pos0)
-    
+    input_pos = torch.tensor([0], device=hidden_states.device, dtype=torch.long)
+    model.forward_generate_fast(hidden_states, input_pos)
     a = codebooks[0] - model.tokenizer.semantic_begin_id
-    a = torch.clamp(a, min=0) 
+    a[a < 0] = 0
     hidden_states = model.fast_embeddings(a)
     codebooks.append(a)
 
-    # Generate Acoustic C1..C7
-    for codebook_idx in range(1, 8):
-        pos_n = torch.tensor([codebook_idx], device=hidden_states.device, dtype=torch.long)
-        logits = model.forward_generate_fast(hidden_states, pos_n)
-        
-        # Penalize this codebook based on its own history
-        prev_tok = None
-        if previous_tokens is not None and (codebook_idx + 1) < previous_tokens.shape[0]:
-             prev_tok = previous_tokens[codebook_idx + 1]
-
+    for codebook_idx in range(1, model.config.num_codebooks):
+        input_pos = torch.tensor(
+            [codebook_idx], device=hidden_states.device, dtype=torch.long
+        )
+        logits = model.forward_generate_fast(hidden_states, input_pos)
         a = sample(
             logits,
-            previous_tokens=prev_tok,
+            previous_tokens=(
+                previous_tokens[codebook_idx + 1]
+                if previous_tokens is not None
+                else None
+            ),
             **sampling_kwargs,
         )[0]
-        
         hidden_states = model.fast_embeddings(a)
         codebooks.append(a)
 
-    return torch.stack(codebooks, dim=0)
+    codebooks = torch.stack(codebooks, dim=0)
+    # semantic_ids_tensor = torch.tensor(semantic_ids, device=codebooks.device)
+    # codebooks[1:, :] = torch.masked_fill(
+    #     codebooks[1:, :], ~torch.isin(codebooks[:1, :], semantic_ids_tensor), CODEBOOK_PAD_TOKEN_ID
+    # )
+
+    # print(codebooks)
+    return codebooks
 
 
 def decode_one_token_naive(
@@ -703,16 +691,14 @@ def load_model(checkpoint_path, device, precision, compile=False, is_agent=False
         )
         logger.info("Using NaiveTransformer")
 
-    # Surgical compilation is now handled by _fast_decode_loop decorator.
-    # We do NOT compile the full decode_one_token function anymore.
-    # if compile:
-    #     logger.info("Compiling function...")
-    #     decode_one_token = torch.compile(
-    #         decode_one_token,
-    #         fullgraph=False,
-    #         backend="inductor" if torch.cuda.is_available() else "aot_eager",
-    #         mode="reduce-overhead" if torch.cuda.is_available() else None,
-    #     )
+    if compile:
+        logger.info("Compiling function...")
+        decode_one_token = torch.compile(
+            decode_one_token,
+            fullgraph=False,
+            backend="inductor" if torch.cuda.is_available() else "aot_eager",
+            mode="reduce-overhead" if torch.cuda.is_available() else None,
+        )
 
     return model.eval(), decode_one_token
 
@@ -848,13 +834,8 @@ def generate_long(
                 partial_encoded = encoded_prompts + partial_encoded
 
             cat_encoded = torch.cat(partial_encoded, dim=1)
-            
-            # Add shape constraints to prevent symbolic_shapes warnings
-            try:
-                torch._dynamo.mark_dynamic(cat_encoded, [1])
-            except:
-                pass
-            
+            prompt_length = cat_encoded.size(1)
+
             t0 = time.perf_counter()
             y = generate(
                 model=model,

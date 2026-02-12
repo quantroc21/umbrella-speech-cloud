@@ -107,30 +107,16 @@ class ModelManager:
         logger.info("Decoder model loaded.")
 
     def warm_up(self, tts_inference_engine) -> None:
-        """
-        Optimized Async Warmup (v18.15 Precision)
-        - English only (Fastest)
-        - 1 Variant (Neutral) to ensure stability
-        - max_new_tokens=48 (Enough for 1 sentence)
-        """
-        logger.info("Keep-Alive: Starting Precision Warmup (v18.17)...")
-        
-        warmup_request = ServeTTSRequest(
-            text="Hello world, this is a test voice.",
+        request = ServeTTSRequest(
+            text="Hello world.",
             references=[],
             reference_id=None,
-            max_new_tokens=48, 
-            chunk_length=0,
+            max_new_tokens=1024,
+            chunk_length=200,
             top_p=0.7,
             repetition_penalty=1.2,
             temperature=0.7,
             format="wav",
         )
-
-        try:
-            logger.info("Warmup (Neutral English)...")
-            list(inference(warmup_request, tts_inference_engine))
-        except Exception as e:
-            logger.error(f"Warmup failed: {e}")
-
-        logger.info("Models warmed up (Quality Restored).")
+        list(inference(request, tts_inference_engine))
+        logger.info("Models warmed up.")

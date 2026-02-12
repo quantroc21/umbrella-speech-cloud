@@ -7,7 +7,7 @@ import os
 VOLUME_SIZE = 100 # GB
 GPU_TYPE_ID = "NVIDIA GeForce RTX 4090"
 DATA_CENTER_ID = "EU-RO-1" # Default if not detecting from endpoint
-IMAGE_NAME = "hoaitroc2212/fish-speech:v18.20-precision"
+IMAGE_NAME = "hoaitroc2212/fish-speech:v18.21-revert-18.7"
 
 if not RUNPOD_API_KEY:
     raise ValueError("Please set RUNPOD_API_KEY environment variable.")
@@ -65,6 +65,7 @@ def create_template():
             name=f"fish-speech-v18.0-aot-{int(time.time())}",
             image_name=IMAGE_NAME,
             container_disk_in_gb=10,
+            volume_mount_path="/runpod-volume", # MOUNT NETWORK VOLUME FOR AOT CACHE
             env=env_dict,
             is_serverless=True
         )
