@@ -47,6 +47,10 @@ def get_s3_client():
 
 def ensure_models():
     """Download models if they are missing."""
+    import shutil
+    total, used, free = shutil.disk_usage("/")
+    print(f"Disk Space: Total={total//(2**30)}GB, Used={used//(2**30)}GB, Free={free//(2**30)}GB")
+
     if not os.path.exists(os.path.join(CHECKPOINT_DIR, "model.pth")):
         print(f"Models missing in {CHECKPOINT_DIR}. Downloading from {REPO_ID}...")
         snapshot_download(

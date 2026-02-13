@@ -7,7 +7,7 @@ import os
 VOLUME_SIZE = 100 # GB
 GPU_TYPE_ID = "NVIDIA GeForce RTX 4090"
 DATA_CENTER_ID = "EU-RO-1" # Default if not detecting from endpoint
-IMAGE_NAME = "hoaitroc2212/fish-speech:v18.22-startup"
+IMAGE_NAME = "hoaitroc2212/fish-speech:v18.23-diskfix"
 
 if not RUNPOD_API_KEY:
     raise ValueError("Please set RUNPOD_API_KEY environment variable.")
@@ -62,9 +62,9 @@ def create_template():
 
     try:
         template = runpod.create_template(
-            name=f"fish-speech-v18.22-startup-{int(time.time())}",
+            name=f"fish-speech-v18.23-diskfix-{int(time.time())}",
             image_name=IMAGE_NAME,
-            container_disk_in_gb=10,
+            container_disk_in_gb=50,
             # volume_mount_path="/runpod-volume", # REMOVED for local cache only
             env=env_dict,
             is_serverless=True
