@@ -108,15 +108,19 @@ class ModelManager:
 
     def warm_up(self, tts_inference_engine) -> None:
         request = ServeTTSRequest(
-            text="Hello world.",
+            text="Hello.",
             references=[],
             reference_id=None,
-            max_new_tokens=1024,
-            chunk_length=200,
+            max_new_tokens=50,
+            chunk_length=0,
             top_p=0.7,
             repetition_penalty=1.2,
             temperature=0.7,
             format="wav",
         )
-        list(inference(request, tts_inference_engine))
+        try:
+            list(inference(request, tts_inference_engine))
+            logger.info("Warmup complete (minimal).")
+        except Exception as e:
+            logger.error(f"Warmup failed: {e}")
         logger.info("Models warmed up.")
