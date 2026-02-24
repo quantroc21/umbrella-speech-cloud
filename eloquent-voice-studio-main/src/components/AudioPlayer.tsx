@@ -1,20 +1,25 @@
-import { Play, Pause, SkipBack, SkipForward, Volume2, Download, Share2 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { Play, Pause, SkipBack, SkipForward, Volume2, Download, Share2, Scissors, Loader2 } from "lucide-react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
+import { Client } from "@gradio/client";
 
 interface AudioPlayerProps {
   audioUrl?: string;
   isGenerating?: boolean;
+  onAudioProcessed?: (url: string) => void;
 }
 
-export function AudioPlayer({ audioUrl, isGenerating }: AudioPlayerProps) {
+export function AudioPlayer({ audioUrl, isGenerating, onAudioProcessed }: AudioPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(80);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [isProcessing, setIsProcessing] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const formatTime = (time: number) => {
@@ -51,7 +56,146 @@ export function AudioPlayer({ audioUrl, isGenerating }: AudioPlayerProps) {
     }
   };
 
-  // Generate waveform bars
+  const handleDownload = async () => {
+    if (!audioUrl) return;
+
+    try {
+      const response = await fetch(audioUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `elephantfat-voice-${Date.now()}.wav`;
+      document.body.appendChild(link);
+      link.click();
+
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Download failed:", err);
+      const link = document.createElement("a");
+      link.href = audioUrl;
+      link.download = `elephantfat-voice-${Date.now()}.wav`;
+      link.click();
+    }
+  };
+
+  const handleShare = async () => {
+    if (!audioUrl) return;
+    try {
+      const response = await fetch(audioUrl);
+      const blob = await response.blob();
+      const file = new File([blob], "voice-gen.wav", { type: "audio/wav" });
+
+      if (navigator.share) {
+        await navigator.share({
+          files: [file],
+          title: 'ElephantFat AI Voice',
+          text: 'Check out this AI voice generation from ElephantFat',
+        });
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        alert("Link copied to clipboard!");
+      }
+    } catch (err) {
+      console.error("Error sharing:", err);
+    }
+  };
+
+  const handleRemoveSilence = async () => {
+    if (!audioUrl || !onAudioProcessed) return;
+
+    setIsProcessing(true);
+    toast({
+      title: "Removing Silence...",
+      description: "Processing audio with ElephantFat AI.",
+    });
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      // Convert audioUrl to Blob
+      let audioBlob: Blob;
+      if (audioUrl.startsWith('data:')) {
+        const parts = audioUrl.split(',');
+        const byteString = atob(parts[1]);
+        const mimeString = parts[0].split(':')[1].split(';')[0];
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+          ia[i] = byteString.charCodeAt(i);
+        }
+        audioBlob = new Blob([ab], { type: mimeString });
+      } else {
+        const response = await fetch(audioUrl);
+        audioBlob = await response.blob();
+      }
+
+      const formData = new FormData();
+      formData.append("file", audioBlob, "audio.wav");
+      formData.append("threshold", "-35");
+      formData.append("duration", "0.3");
+
+      const apiUrl = window.location.hostname === 'localhost'
+        ? 'http://localhost:8000/api/audio/cut-silence'
+        : '/api/audio/cut-silence';
+
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        // Handle error: might be JSON or plain text
+        let errorMsg = `HTTP ${response.status}`;
+        try {
+          const errData = await response.json();
+          errorMsg = errData.error || errData.detail || errorMsg;
+        } catch {
+          const text = await response.text();
+          errorMsg = text || errorMsg;
+        }
+        throw new Error(errorMsg);
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+
+      if (contentType.includes("audio/")) {
+        // Backend returned the processed audio file directly
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        onAudioProcessed(blobUrl);
+        toast({
+          title: "Success!",
+          description: "Silence removed successfully.",
+        });
+      } else {
+        // Backend returned JSON (e.g. no silence found)
+        const result = await response.json();
+        if (result.error) throw new Error(result.error);
+        toast({
+          title: "Info",
+          description: result.warning || result.message || "No significant silence found.",
+        });
+      }
+
+    } catch (error: any) {
+      console.error("Silence removal failed:", error);
+      toast({
+        title: "Warning",
+        description: error.message || "Silence removal failed, using original file.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const waveformBars = Array.from({ length: 60 }, (_, i) => {
     const height = Math.random() * 100;
     const isActive = duration > 0 && (i / 60) * duration <= currentTime;
@@ -68,7 +212,6 @@ export function AudioPlayer({ audioUrl, isGenerating }: AudioPlayerProps) {
         onEnded={() => setIsPlaying(false)}
       />
 
-      {/* Waveform Visualization */}
       <div className="relative h-20 flex items-center justify-center gap-[2px] px-4">
         {isGenerating ? (
           <div className="flex items-center gap-1">
@@ -97,13 +240,11 @@ export function AudioPlayer({ audioUrl, isGenerating }: AudioPlayerProps) {
         )}
       </div>
 
-      {/* Time Display */}
       <div className="flex justify-between text-sm text-muted-foreground px-1">
         <span>{formatTime(currentTime)}</span>
         <span>{formatTime(duration)}</span>
       </div>
 
-      {/* Progress Slider */}
       <Slider
         value={[currentTime]}
         max={duration || 100}
@@ -112,7 +253,6 @@ export function AudioPlayer({ audioUrl, isGenerating }: AudioPlayerProps) {
         className="cursor-pointer"
       />
 
-      {/* Controls */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
@@ -151,10 +291,32 @@ export function AudioPlayer({ audioUrl, isGenerating }: AudioPlayerProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground"
+            onClick={handleRemoveSilence}
+            title="Remove Silence"
+            disabled={!audioUrl || isProcessing}
+          >
+            {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Scissors className="w-5 h-5" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground"
+            onClick={handleDownload}
+            disabled={!audioUrl}
+          >
             <Download className="w-5 h-5" />
           </Button>
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground"
+            onClick={handleShare}
+            disabled={!audioUrl}
+          >
             <Share2 className="w-5 h-5" />
           </Button>
         </div>

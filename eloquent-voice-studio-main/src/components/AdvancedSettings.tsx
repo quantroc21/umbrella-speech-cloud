@@ -1,70 +1,14 @@
-import { ChevronDown, RotateCcw } from "lucide-react";
-import { useState } from "react";
 import { Slider } from "@/components/ui/slider";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { HelpCircle } from "lucide-react";
 
-interface SettingSliderProps {
-  label: string;
-  description?: string;
-  value: number;
-  onChange: (value: number) => void;
-  min: number;
-  max: number;
-  step: number;
-  defaultValue: number;
-}
-
-function SettingSlider({ label, description, value, onChange, min, max, step, defaultValue }: SettingSliderProps) {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <label className="text-sm font-medium text-foreground">{label}</label>
-          {description && (
-            <p className="text-xs text-muted-foreground">{description}</p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-mono bg-secondary px-2 py-1 rounded text-foreground min-w-[50px] text-center">
-            {value}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-            onClick={() => onChange(defaultValue)}
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </Button>
-        </div>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className="text-xs text-muted-foreground w-8">{min}</span>
-        <Slider
-          value={[value]}
-          min={min}
-          max={max}
-          step={step}
-          onValueChange={(v) => onChange(v[0])}
-          className="flex-1"
-        />
-        <span className="text-xs text-muted-foreground w-8 text-right">{max}</span>
-      </div>
-    </div>
-  );
-}
-
-interface AdvancedSettingsProps {
-  settings: {
-    sentencePause: number;
-    speechSpeed: number;
+interface Settings {
     iterativeLength: number;
     maxTokens: number;
     topP: number;
@@ -72,143 +16,141 @@ interface AdvancedSettingsProps {
     repetitionPenalty: number;
     seed: number;
     useMemoryCache: boolean;
-  };
-  onSettingsChange: (settings: AdvancedSettingsProps["settings"]) => void;
+}
+
+interface AdvancedSettingsProps {
+    settings: Settings;
+    onSettingsChange: (settings: Settings) => void;
 }
 
 export function AdvancedSettings({ settings, onSettingsChange }: AdvancedSettingsProps) {
-  const [isOpen, setIsOpen] = useState(false);
+    const handleChange = (key: keyof Settings, value: number | boolean) => {
+        onSettingsChange({ ...settings, [key]: value });
+    };
 
-  const updateSetting = <K extends keyof typeof settings>(key: K, value: typeof settings[K]) => {
-    onSettingsChange({ ...settings, [key]: value });
-  };
-
-  return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <CollapsibleTrigger asChild>
-        <button className="w-full flex items-center justify-between p-4 bg-card rounded-xl border border-border hover:bg-secondary/30 transition-colors">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M12 1v6m0 6v10M1 12h6m6 0h10" />
-              </svg>
-            </div>
-            <span className="font-medium text-foreground">Advanced Voice Settings</span>
-          </div>
-          <ChevronDown className={cn("w-5 h-5 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
-        </button>
-      </CollapsibleTrigger>
-
-      <CollapsibleContent>
-        <div className="mt-2 p-6 bg-card rounded-xl border border-border space-y-6">
-          {/* Row 1: Sentence Pause & Speech Speed */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <SettingSlider
-              label="Sentence Pause (Breathing)"
-              description="Insert silence between sentences"
-              value={settings.sentencePause}
-              onChange={(v) => updateSetting("sentencePause", v)}
-              min={0}
-              max={2}
-              step={0.1}
-              defaultValue={0}
-            />
-            <SettingSlider
-              label="Speech Speed"
-              value={settings.speechSpeed}
-              onChange={(v) => updateSetting("speechSpeed", v)}
-              min={0.5}
-              max={2}
-              step={0.1}
-              defaultValue={1}
-            />
-          </div>
-
-          {/* Row 2: Iterative Length & Max Tokens */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <SettingSlider
-              label="Iterative Length"
-              description="Set 50 for natural pauses"
-              value={settings.iterativeLength}
-              onChange={(v) => updateSetting("iterativeLength", v)}
-              min={50}
-              max={400}
-              step={10}
-              defaultValue={150}
-            />
-            <SettingSlider
-              label="Max Tokens"
-              description="0 = Auto"
-              value={settings.maxTokens}
-              onChange={(v) => updateSetting("maxTokens", v)}
-              min={0}
-              max={2048}
-              step={64}
-              defaultValue={0}
-            />
-          </div>
-
-          {/* Row 3: Top-P & Temperature */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <SettingSlider
-              label="Top-P (Creativity)"
-              value={settings.topP}
-              onChange={(v) => updateSetting("topP", v)}
-              min={0.7}
-              max={0.95}
-              step={0.01}
-              defaultValue={0.8}
-            />
-            <SettingSlider
-              label="Temperature"
-              value={settings.temperature}
-              onChange={(v) => updateSetting("temperature", v)}
-              min={0.7}
-              max={1}
-              step={0.01}
-              defaultValue={0.8}
-            />
-          </div>
-
-          {/* Row 4: Repetition Penalty & Seed */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <SettingSlider
-              label="Repetition Penalty"
-              value={settings.repetitionPenalty}
-              onChange={(v) => updateSetting("repetitionPenalty", v)}
-              min={1}
-              max={1.2}
-              step={0.01}
-              defaultValue={1.1}
-            />
+    return (
+        <div className="space-y-6">
+            {/* Iterative Length */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-foreground">Seed</label>
-                <input
-                  type="number"
-                  value={settings.seed}
-                  onChange={(e) => updateSetting("seed", parseInt(e.target.value) || 0)}
-                  className="w-24 text-sm font-mono bg-secondary px-3 py-1.5 rounded border-none text-foreground text-center focus:ring-2 focus:ring-primary/20 outline-none"
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Label>Prompt Length</Label>
+                        <Tooltip>
+                            <TooltipTrigger>
+                                <HelpCircle className="w-3 h-3 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                Controls how much context is used for generation. Higher values means more context (slower).
+                            </TooltipContent>
+                        </Tooltip>
+                    </div>
+                    <span className="text-xs font-mono text-muted-foreground">{settings.iterativeLength}</span>
+                </div>
+                <Slider
+                    value={[settings.iterativeLength]}
+                    min={0}
+                    max={500}
+                    step={10}
+                    onValueChange={([val]) => handleChange("iterativeLength", val)}
                 />
-              </div>
-              <p className="text-xs text-muted-foreground">0 = Random seed each time</p>
             </div>
-          </div>
 
-          {/* Memory Cache Toggle */}
-          <div className="flex items-center justify-between pt-4 border-t border-border">
-            <div>
-              <label className="text-sm font-medium text-foreground">Use Memory Cache</label>
-              <p className="text-xs text-muted-foreground">Cache voice models for faster generation</p>
+            {/* Max Tokens */}
+            <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Label>Max New Tokens</Label>
+                    </div>
+                    <span className="text-xs font-mono text-muted-foreground">{settings.maxTokens}</span>
+                </div>
+                <Slider
+                    value={[settings.maxTokens]}
+                    min={128}
+                    max={2048}
+                    step={64}
+                    onValueChange={([val]) => handleChange("maxTokens", val)}
+                />
             </div>
-            <Switch
-              checked={settings.useMemoryCache}
-              onCheckedChange={(v) => updateSetting("useMemoryCache", v)}
-            />
-          </div>
+
+            {/* Top P */}
+            <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                    <Label>Top P</Label>
+                    <span className="text-xs font-mono text-muted-foreground">{settings.topP}</span>
+                </div>
+                <Slider
+                    value={[settings.topP]}
+                    min={0.1}
+                    max={1.0}
+                    step={0.05}
+                    onValueChange={([val]) => handleChange("topP", val)}
+                />
+            </div>
+
+            {/* Temperature */}
+            <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                    <Label>Temperature</Label>
+                    <span className="text-xs font-mono text-muted-foreground">{settings.temperature}</span>
+                </div>
+                <Slider
+                    value={[settings.temperature]}
+                    min={0.1}
+                    max={1.5}
+                    step={0.05}
+                    onValueChange={([val]) => handleChange("temperature", val)}
+                />
+            </div>
+
+            {/* Repetition Penalty */}
+            <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                    <Label>Repetition Penalty</Label>
+                    <span className="text-xs font-mono text-muted-foreground">{settings.repetitionPenalty}</span>
+                </div>
+                <Slider
+                    value={[settings.repetitionPenalty]}
+                    min={1.0}
+                    max={2.0}
+                    step={0.05}
+                    onValueChange={([val]) => handleChange("repetitionPenalty", val)}
+                />
+            </div>
+
+            {/* Seed */}
+            <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Label>Seed</Label>
+                        <Tooltip>
+                            <TooltipTrigger>
+                                <HelpCircle className="w-3 h-3 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                Set to 0 for random generation.
+                            </TooltipContent>
+                        </Tooltip>
+                    </div>
+                    <span className="text-xs font-mono text-muted-foreground">{settings.seed}</span>
+                </div>
+                <div className="flex gap-2">
+                    <input
+                        type="number"
+                        value={settings.seed}
+                        onChange={(e) => handleChange("seed", parseInt(e.target.value) || 0)}
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                </div>
+            </div>
+
+            <div className="flex items-center justify-between space-x-2">
+                <Label htmlFor="memory-cache">Use Memory Cache</Label>
+                <Switch
+                    id="memory-cache"
+                    checked={settings.useMemoryCache}
+                    onCheckedChange={(val) => handleChange("useMemoryCache", val)}
+                />
+            </div>
         </div>
-      </CollapsibleContent>
-    </Collapsible>
-  );
+    );
 }
