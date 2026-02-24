@@ -47,10 +47,11 @@ export function AuthDialog({ open, onOpenChange, defaultView = "login" }: AuthDi
                     password,
                 });
                 if (error) throw error;
-                toast({
-                    title: "Welcome back!",
-                    description: "You have successfully signed in.",
-                });
+                if (error) throw error;
+                // toast({
+                //     title: "Welcome back!",
+                //     description: "You have successfully signed in.",
+                // });
                 onOpenChange(false);
             } else {
                 const { data, error } = await supabase.auth.signUp({

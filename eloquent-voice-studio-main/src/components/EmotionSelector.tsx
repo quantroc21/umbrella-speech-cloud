@@ -1,44 +1,53 @@
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Sparkles, CloudRain, Smile, Frown, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Sparkles, Wind, Frown, Laugh, Briefcase } from "lucide-react";
 
-interface Emotion {
-  id: string;
-  label: string;
-  icon: React.ReactNode;
-  tag: string;
-}
-
-const emotions: Emotion[] = [
-  { id: "excited", label: "Excited", icon: <Sparkles className="w-4 h-4" />, tag: "[excited]" },
-  { id: "whisper", label: "Whisper", icon: <Wind className="w-4 h-4" />, tag: "[whispering]" },
-  { id: "sad", label: "Sad", icon: <Frown className="w-4 h-4" />, tag: "[sad]" },
-  { id: "laugh", label: "Laugh", icon: <Laugh className="w-4 h-4" />, tag: "[laughing]" },
-  { id: "serious", label: "Serious", icon: <Briefcase className="w-4 h-4" />, tag: "[serious]" },
+const emotions = [
+    { id: "excited", label: "Excited", icon: Sparkles },
+    { id: "whisper", label: "Whisper", icon: CloudRain },
+    { id: "sad", label: "Sad", icon: Frown },
+    { id: "laugh", label: "Laugh", icon: Smile },
+    { id: "serious", label: "Serious", icon: ShieldAlert },
 ];
 
 interface EmotionSelectorProps {
-  selectedEmotion: string | null;
-  onEmotionChange: (emotionId: string | null) => void;
+    selectedEmotion: string | null;
+    onEmotionChange: (emotion: string | null) => void;
 }
 
 export function EmotionSelector({ selectedEmotion, onEmotionChange }: EmotionSelectorProps) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {emotions.map((emotion) => (
-        <button
-          key={emotion.id}
-          onClick={() => onEmotionChange(selectedEmotion === emotion.id ? null : emotion.id)}
-          className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all",
-            selectedEmotion === emotion.id
-              ? "bg-primary text-primary-foreground shadow-lg glow-primary"
-              : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
-          )}
-        >
-          {emotion.icon}
-          {emotion.label}
-        </button>
-      ))}
-    </div>
-  );
+    return (
+        <div className="flex flex-wrap gap-2">
+            {emotions.map((emotion) => {
+                const Icon = emotion.icon;
+                const isSelected = selectedEmotion === emotion.id;
+
+                return (
+                    <Tooltip key={emotion.id}>
+                        <TooltipTrigger asChild>
+                            <button
+                                onClick={() => onEmotionChange(isSelected ? null : emotion.id)}
+                                className={cn(
+                                    "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 border",
+                                    isSelected
+                                        ? "bg-primary/20 text-primary border-primary/30"
+                                        : "bg-secondary/50 text-muted-foreground border-transparent hover:bg-secondary hover:text-foreground"
+                                )}
+                            >
+                                <Icon className={cn("w-3.5 h-3.5", isSelected && "text-primary")} />
+                                {emotion.label}
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>Apply {emotion.label} tone</p>
+                        </TooltipContent>
+                    </Tooltip>
+                );
+            })}
+        </div>
+    );
 }

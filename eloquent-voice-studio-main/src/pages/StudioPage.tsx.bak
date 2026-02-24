@@ -8,7 +8,8 @@ import { AdvancedSettings } from "@/components/AdvancedSettings";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { AddVoiceDialog } from "@/components/AddVoiceDialog";
-import { SilenceCutter } from "@/components/SilenceCutter";
+import { AuthDialog } from "@/components/AuthDialog";
+import { VietQRDialog } from "@/components/VietQRDialog";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
 import {
@@ -18,8 +19,6 @@ import {
 } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, Settings2 } from "lucide-react";
 
 const API_BASE = window.location.origin;
 
@@ -57,14 +56,14 @@ const StudioPage = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | undefined>();
   const [isAddVoiceOpen, setIsAddVoiceOpen] = useState(false);
-
-  // Use the hook for user profile & credits
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isVietQROpen, setIsVietQROpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const { user, creditBalance, refreshCredits } = useProfile();
 
   // Audio Preview State
   const [playingVoicePreview, setPlayingVoicePreview] = useState<string | null>(null);
   const [currentPreviewAudio, setCurrentPreviewAudio] = useState<HTMLAudioElement | null>(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const [advancedSettings, setAdvancedSettings] = useState({
     sentencePause: 0,
@@ -80,7 +79,7 @@ const StudioPage = () => {
 
   useEffect(() => {
     fetchVoices();
-  }, [user]); // Re-fetch voices when user changes (auth state)
+  }, [user]);
 
   const fetchVoices = async () => {
     try {
@@ -116,6 +115,8 @@ const StudioPage = () => {
       setVoices(PRESET_VOICES);
     }
   };
+
+  const [enableSilenceCutter, setEnableSilenceCutter] = useState(false);
 
   const handleGenerate = async () => {
     if (!user) {
@@ -157,7 +158,8 @@ const StudioPage = () => {
         voice_id: selectedVoice,
         top_p: advancedSettings.topP,
         repetition_penalty: advancedSettings.repetitionPenalty,
-        temperature: advancedSettings.temperature
+        temperature: advancedSettings.temperature,
+        enable_silence_cutter: enableSilenceCutter
       };
 
       const response = await fetch(`${API_BASE}/api/generate`, {
@@ -193,6 +195,7 @@ const StudioPage = () => {
 
       let status = initialJob.status;
       let finalAudioUrl = null;
+      let finalAudioBase64 = null;
 
       while (status !== "COMPLETED" && status !== "FAILED" && status !== "CANCELLED") {
         await new Promise(r => setTimeout(r, 2000)); // Poll every 2s
@@ -208,32 +211,60 @@ const StudioPage = () => {
         }
 
         const jobData = await statusRes.json();
-        console.log("Job Update:", jobData);
         status = jobData.status;
 
         if (status === "COMPLETED") {
           const output = jobData.output;
 
           if (output?.audio_base64) {
-            finalAudioUrl = `data:audio/wav;base64,${output.audio_base64}`;
+            finalAudioBase64 = output.audio_base64;
           } else if (output?.output?.audio_base64) {
-            finalAudioUrl = `data:audio/wav;base64,${output.output.audio_base64}`;
+            finalAudioBase64 = output.output.audio_base64;
+          }
+
+          if (finalAudioBase64) {
+            finalAudioUrl = `data:audio/wav;base64,${finalAudioBase64}`;
           } else {
-            finalAudioUrl = output?.audio_url ||
-              output?.output?.audio_url ||
-              (typeof output === 'string' ? output : null);
+            finalAudioUrl = output?.audio_url || output?.output?.audio_url || (typeof output === 'string' ? output : null);
           }
         } else if (status === "FAILED") {
           throw new Error(jobData.error || "Generation failed on worker");
         }
       }
 
+      // --- SILENCE CUTTER LOGIC ---
+      if (enableSilenceCutter && finalAudioBase64) {
+        toast({ title: "Processing Silence Removal...", description: "Please wait..." });
+
+        const cutRes = await fetch(`${API_BASE}/api/process_silence`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            audio_base64: finalAudioBase64,
+            min_silence_duration: 0.5
+          })
+        });
+
+        if (cutRes.ok) {
+          const cutData = await cutRes.json();
+          if (cutData.audio_base64) {
+            finalAudioUrl = `data:audio/wav;base64,${cutData.audio_base64}`;
+            toast({ title: "Success", description: "Audio generated and silence removed!" });
+          }
+        } else {
+          console.error("Silence cutter failed", await cutRes.text());
+          toast({ title: "Warning", description: "Audio generated, but silence removal failed.", variant: "destructive" });
+        }
+      } else if (finalAudioUrl) {
+        toast({ title: "Success", description: "Your audio is ready!" });
+      }
+
       if (finalAudioUrl) {
         setAudioUrl(finalAudioUrl);
-        toast({
-          title: "Success",
-          description: "Your audio is ready!",
-        });
+        refreshCredits(); // Update balance after generation
       } else {
         throw new Error("Generation completed but no audio URL was returned.");
       }
@@ -303,7 +334,12 @@ const StudioPage = () => {
 
   return (
     <>
-      <Navigation user={user} credits={creditBalance} />
+      <Navigation
+        user={user}
+        creditBalance={creditBalance}
+        onLoginClick={() => { setAuthMode("login"); setIsAuthOpen(true); }}
+        onSignupClick={() => { setAuthMode("signup"); setIsAuthOpen(true); }}
+      />
       <div className="min-h-screen bg-background">
         <div className="flex flex-col lg:flex-row h-[calc(100vh-64px)]">
           {/* Left Column - Script Input Canvas (70%) */}
@@ -324,6 +360,24 @@ const StudioPage = () => {
                     </p>
                   </div>
                 </div>
+
+                {user && (
+                  <div className="flex items-center gap-3">
+                    <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full border border-primary/20">
+                      <Coins className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-bold text-primary">Số dư: {creditBalance.toLocaleString()} ký tự</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsVietQROpen(true)}
+                      className="gap-2 border-primary/30 text-primary hover:bg-primary/10"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Nạp Credits
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -334,7 +388,7 @@ const StudioPage = () => {
                   <AlertCircle className="h-4 w-4 text-primary" />
                   <AlertTitle>Sign in to start creating</AlertTitle>
                   <AlertDescription>
-                    Authenticated users get 5,000 free credits to explore VoiceCraft Pro.
+                    Người dùng mới nhận ngay 5.000 ký tự trải nghiệm miễn phí VoiceCraft Pro.
                   </AlertDescription>
                 </Alert>
               )}
@@ -343,31 +397,24 @@ const StudioPage = () => {
 
 
                 {/* 2. Text Input (Expanded Workspace) & Emotion Selector */}
-                <div className="flex-1 flex flex-col gap-4 mt-6 min-h-[400px]">
+                <div className="flex-1 flex flex-col gap-4 mt-6 min-h-[300px]">
                   <TextInput
                     value={text}
                     onChange={setText}
-                    className="flex-1 h-full shadow-sm"
+                    className="flex-1"
                   />
 
-                  <div className="shrink-0 flex items-center justify-between">
+                  <div className="shrink-0">
                     <EmotionSelector
                       selectedEmotion={selectedEmotion}
                       onEmotionChange={setSelectedEmotion}
                     />
-                    <div className="text-xs text-muted-foreground mr-2">
-                      {text.length}/{5000} chars
-                    </div>
                   </div>
                 </div>
 
                 {/* 3. Audio Playback Section (Bottom Floating) */}
                 <div className="mt-6 pt-4 pb-2 shrink-0">
-                  <AudioPlayer audioUrl={audioUrl} isGenerating={isGenerating} onAudioProcessed={setAudioUrl} />
-                  <SilenceCutter
-                    audioUrl={audioUrl}
-                    onAudioProcessed={(newUrl) => setAudioUrl(newUrl)}
-                  />
+                  <AudioPlayer audioUrl={audioUrl} isGenerating={isGenerating} />
                 </div>
               </div>
             </div>
@@ -389,8 +436,8 @@ const StudioPage = () => {
               </p>
             </div>
 
-            {/* Voice Grid - Flexible Height */}
-            <ScrollArea className="flex-1 border-b border-border bg-card/50">
+            {/* Voice Grid - Top 50% */}
+            <ScrollArea className="h-1/2 border-b border-border">
               <div className="p-6">
                 <div className="grid grid-cols-1 gap-3">
                   {voices.map((voice) => (
@@ -399,7 +446,7 @@ const StudioPage = () => {
                       onClick={() => setSelectedVoice(voice.id)}
                       className={`group relative p-4 rounded-xl border cursor-pointer transition-all duration-200 ${selectedVoice === voice.id
                         ? "border-primary bg-primary/10 shadow-md shadow-primary/10"
-                        : "border-border bg-card hover:border-primary/40 hover:bg-secondary/50"
+                        : "border-border bg-secondary/30 hover:border-primary/40 hover:bg-secondary/50"
                         }`}
                     >
                       <div className="flex items-center justify-between">
@@ -444,39 +491,38 @@ const StudioPage = () => {
               </div>
             </ScrollArea>
 
-            {/* Advanced Settings - Collapsible */}
-            <div className="border-t border-border bg-card">
-              <Collapsible
-                open={isSettingsOpen}
-                onOpenChange={setIsSettingsOpen}
-                className="w-full"
-              >
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" className="w-full flex items-center justify-between p-4 h-auto rounded-none hover:bg-secondary/50">
-                    <div className="flex items-center gap-2">
-                      <Settings2 className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-semibold text-sm">Advanced Voice Settings</span>
-                    </div>
-                    {isSettingsOpen ? (
-                      <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                    ) : (
-                      <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                    )}
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <ScrollArea className="h-[300px] p-6 pt-0 border-t border-border/50">
-                    <AdvancedSettings
-                      settings={advancedSettings}
-                      onSettingsChange={setAdvancedSettings}
-                    />
-                  </ScrollArea>
-                </CollapsibleContent>
-              </Collapsible>
+            {/* Advanced Settings - Bottom 50% */}
+            <div className="h-1/2 flex flex-col bg-secondary/10">
+              <div className="p-4 border-b border-border bg-card">
+                <h3 className="font-semibold text-sm text-foreground">Advanced Settings</h3>
+              </div>
+              <ScrollArea className="flex-1 p-6">
+                <AdvancedSettings
+                  settings={advancedSettings}
+                  onSettingsChange={setAdvancedSettings}
+                />
+              </ScrollArea>
             </div>
 
             {/* Generate Button & Footer */}
             <div className="p-4 lg:p-5 border-t border-border space-y-4">
+              {/* Silence Cutter Checkbox */}
+              <div className="flex items-center space-x-2 px-1">
+                <input
+                  type="checkbox"
+                  id="silence-cutter"
+                  checked={enableSilenceCutter}
+                  onChange={(e) => setEnableSilenceCutter(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <label
+                  htmlFor="silence-cutter"
+                  className="text-sm font-medium leading-none cursor-pointer text-foreground"
+                >
+                  Enable Auto Silence Removal (Cắt khoảng lặng)
+                </label>
+              </div>
+
               {/* Generate Button */}
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -523,6 +569,19 @@ const StudioPage = () => {
         onOpenChange={setIsAddVoiceOpen}
         onSuccess={fetchVoices}
         apiBase={API_BASE}
+      />
+
+      <AuthDialog
+        open={isAuthOpen}
+        onOpenChange={setIsAuthOpen}
+        defaultView={authMode}
+      />
+
+      <VietQRDialog
+        open={isVietQROpen}
+        onOpenChange={setIsVietQROpen}
+        userId={user?.id}
+        email={user?.email}
       />
     </>
   );
