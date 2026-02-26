@@ -16,6 +16,7 @@ This task tracks the setup and maintenance of the shared AI context between Wind
 - [x] Fixed DNS for ElephantFat (Cloudflare Migration)
 - [x] AI Keywords Backend Fix (Error handling + JSON parsing)
 - [x] Backend Service Restart (API is live)
+- [x] DeepSeek API Integration (Stable after credit update)
 
 ## Pending Tasks (Next for Mac)
 - [ ] V3 Studio Page UI update

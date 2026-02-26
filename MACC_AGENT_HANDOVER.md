@@ -6,7 +6,7 @@
 ## Project Overview
 This project is **Fish Speech V1.5**, a high-quality text-to-speech system. 
 - **Frontend**: React + Vite + Tailwind CSS (located in `eloquent-voice-studio-main`).
-- **Backend API**: FastAPI (`deployment_v15/hostinger_api.py`) handling credits, RunPod dispatch, and payments (SePay).
+- **Backend API**: FastAPI (`hostinger_api_fixed.py`) handling credits, RunPod dispatch, and payments (SePay) on **Spaceship VM**.
 - **Inference**: Fish Speech core engine with custom integrations for RunPod.
 
 ## Critical Resolved Issues
@@ -32,12 +32,16 @@ The following issues have been successfully resolved. **Do not modify these core
 - **Fix**: Implemented strict error handling, regex-based keyword extraction failsafes, and detailed logging in the backend. Restarted `fish-api` service on production.
 - **Reference**: Conversation IDs `74983956` and `f0c0b619`.
 
+### 5. DeepSeek API Integration
+- **Status**: **Fully Working**.
+- **Context**: Successfully integrated DeepSeek for intelligent processing. After updating credits and refining the API logic in `hostinger_api_fixed.py`, the feature is now stable and error-free on the **Spaceship VM**.
+
 ## Current Focus
 - **Frontend V3 UI**: Updating the Studio page and TTF fonts (Be Vietnam Pro).
 - **Mac Transition**: Seamlessly resuming work on the MacBook using the `.agent` sync.
-- **yt-dlp-ui Integration**: Planning the integration of the video downloader feature.
+- **yt-dlp-ui Integration**: Planning the integration of the video downloader feature on the **Spaceship VM** setup.
 
 ## Key Files
-- `deployment_v15/hostinger_api.py`: Main backend for Hostinger.
+- `hostinger_api_fixed.py`: Main backend for the Spaceship VM (most important API file).
 - `eloquent-voice-studio-main/`: Frontend source code.
-- `deploy_production.bat`: Current deployment script for Windows.
+- `deploy_frontend.ps1`: Primary deployment script (PowerShell) for the frontend.
