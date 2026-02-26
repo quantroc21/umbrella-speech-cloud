@@ -4,6 +4,7 @@
 > This guide is intended for the Antigravity agent on your MacBook to quickly understand the current project state and progress.
 
 ## Project Overview
+<!-- Workflow Sync Test: Mac Agent (CD44) - 2026-02-26 -->
 This project is **Fish Speech V1.5**, a high-quality text-to-speech system. 
 - **Frontend**: React + Vite + Tailwind CSS (located in `eloquent-voice-studio-main`).
 - **Backend API**: FastAPI (`hostinger_api_fixed.py`) handling credits, RunPod dispatch, and payments (SePay) on **Spaceship VM**.
