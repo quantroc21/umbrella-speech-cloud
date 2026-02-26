@@ -489,6 +489,119 @@ async def broll_search(
         logger.error(f"B-roll search failed: {traceback.format_exc()}")
         return {"error": f"B-roll search failed: {str(e)}"}
 
+class ScriptRequest(BaseModel):
+    script: str
+
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
+
+@app.post("/api/ai-keywords")
+async def generate_ai_keywords(request: ScriptRequest, user=Depends(get_current_user)):
+    """Analyze a TTS script and return optimized B-roll visual keywords using DeepSeek."""
+    logger.info(f"AI Keywords request from user {user.id}, script length: {len(request.script)}")
+
+    # Validate script
+    script_text = request.script.strip()
+    if not script_text:
+        raise HTTPException(status_code=400, detail="Script is empty")
+    if len(script_text) < 10:
+        raise HTTPException(status_code=400, detail="Script is too short (minimum 10 characters)")
+
+    # Check API key
+    if not DEEPSEEK_API_KEY:
+        logger.error("DEEPSEEK_API_KEY is missing from .env!")
+        raise HTTPException(status_code=500, detail="DeepSeek API key is not configured on the server.")
+
+    logger.info(f"DeepSeek API key present: {DEEPSEEK_API_KEY[:8]}...")
+
+    system_prompt = """=== STRICT RULES ===
+- NEVER mention any brand names, logos, copyrighted characters, or trademarks.
+- NEVER hallucinate visual details not supported by the script.
+- Each segment MUST be 12–27 words maximum (5–10 seconds at 150 wpm).
+- search_query must be natural, highly searchable English (10–18 words max).
+- Output ONLY a valid JSON object. No explanations, no markdown.
+
+=== JSON SCHEMA ===
+{
+  "overall_theme": "string (one concise, professional sentence)",
+  "segments": [
+    {
+      "segment_id": integer,
+      "text": "exact original text of this segment",
+      "estimated_seconds": integer (5-10),
+      "keywords": {
+        "subject": "string",
+        "action": "string",
+        "setting": "string",
+        "mood_style": "string",
+        "search_query": "string (natural, highly searchable)"
+      }
+    }
+  ]
+}"""
+
+    # Step 1: Call DeepSeek API
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            logger.info("Sending request to DeepSeek API...")
+            response = await client.post(
+                "https://api.deepseek.com/chat/completions",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
+                },
+                json={
+                    "model": "deepseek-chat",
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": script_text}
+                    ],
+                    "response_format": {"type": "json_object"},
+                    "temperature": 0.7
+                }
+            )
+            logger.info(f"DeepSeek response status: {response.status_code}")
+    except httpx.TimeoutException:
+        logger.error("DeepSeek API call timed out after 60s")
+        raise HTTPException(status_code=504, detail="AI provider timed out. Please try again.")
+    except httpx.ConnectError as e:
+        logger.error(f"DeepSeek connection failed: {e}")
+        raise HTTPException(status_code=502, detail="Cannot connect to AI provider. Please try again later.")
+    except Exception as e:
+        logger.error(f"DeepSeek API call failed: {traceback.format_exc()}")
+        raise HTTPException(status_code=502, detail=f"AI provider request failed: {str(e)}")
+
+    # Step 2: Check response status
+    if response.status_code != 200:
+        error_body = response.text[:500]
+        logger.error(f"DeepSeek returned {response.status_code}: {error_body}")
+        raise HTTPException(status_code=502, detail=f"AI provider returned error {response.status_code}")
+
+    # Step 3: Parse DeepSeek response
+    try:
+        data = response.json()
+        content = data["choices"][0]["message"]["content"]
+        logger.info(f"DeepSeek returned content length: {len(content)}")
+    except (KeyError, IndexError) as e:
+        logger.error(f"Unexpected DeepSeek response structure: {traceback.format_exc()}")
+        logger.error(f"Response body: {response.text[:500]}")
+        raise HTTPException(status_code=502, detail="AI provider returned an unexpected response format")
+
+    # Step 4: Parse JSON content  
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse AI JSON output: {e}")
+        logger.error(f"Raw content: {content[:500]}")
+        raise HTTPException(status_code=502, detail="AI returned invalid JSON. Please try again.")
+
+    # Step 5: Validate structure
+    if "segments" not in parsed or not isinstance(parsed.get("segments"), list):
+        logger.error(f"AI response missing 'segments' array. Keys: {list(parsed.keys())}")
+        raise HTTPException(status_code=502, detail="AI returned incomplete data. Please try again.")
+
+    logger.info(f"AI Keywords success: {len(parsed['segments'])} segments generated")
+    return parsed
+
 @app.post("/api/payment/sepay-webhook")
 async def sepay_webhook(request: Request):
     try:
