@@ -57,7 +57,7 @@ const Navigation = ({ user, credits = 0 }: NavigationProps) => {
             <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
               <span className="text-2xl">🐘</span>
               <span className="font-bold text-xl text-foreground">ElephantFat</span>
-              <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-mono">v3.1</span>
+              <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-mono">v3.2</span>
             </Link>
 
             {/* Desktop Navigation */}
