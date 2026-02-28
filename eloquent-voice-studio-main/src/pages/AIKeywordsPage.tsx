@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
-import { Sparkles, Copy, FileJson } from "lucide-react";
+import { Sparkles, Copy, FileJson, Film } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { supabase } from "@/lib/supabase";
 
@@ -30,8 +31,19 @@ interface AIResponse {
 
 export default function AIKeywordsPage() {
     const [script, setScript] = useState("");
+    const [genre, setGenre] = useState("general");
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [result, setResult] = useState<AIResponse | null>(null);
+
+    const GENRE_OPTIONS = [
+        { value: "general", label: "🎬 General Cinematic" },
+        { value: "documentary", label: "🎥 Documentary" },
+        { value: "youtube_faceless", label: "▶️ YouTube Faceless" },
+        { value: "marketing", label: "📢 Marketing / Ad" },
+        { value: "educational", label: "📚 Educational" },
+    ];
+
+    const MAX_CHARS = 5000;
 
     const handleAnalyze = async () => {
         if (!script.trim()) {
@@ -52,7 +64,7 @@ export default function AIKeywordsPage() {
                     "Content-Type": "application/json",
                     ...(token ? { "Authorization": `Bearer ${token}` } : {})
                 },
-                body: JSON.stringify({ script })
+                body: JSON.stringify({ script, genre })
             });
 
             if (!response.ok) {
@@ -117,29 +129,59 @@ export default function AIKeywordsPage() {
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
+                            {/* Genre Selector */}
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground shrink-0">
+                                    <Film className="w-4 h-4" />
+                                    Video Genre:
+                                </div>
+                                <Select value={genre} onValueChange={setGenre}>
+                                    <SelectTrigger className="w-[240px]">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {GENRE_OPTIONS.map(opt => (
+                                            <SelectItem key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
                             <Textarea
-                                placeholder="Paste your English TTS script here..."
+                                placeholder="Paste your English TTS script here (up to 5,000 characters)..."
                                 className="min-h-[200px] bg-secondary/20 resize-y text-base p-4"
                                 value={script}
-                                onChange={(e) => setScript(e.target.value)}
+                                onChange={(e) => {
+                                    if (e.target.value.length <= MAX_CHARS) setScript(e.target.value);
+                                }}
+                                maxLength={MAX_CHARS}
                             />
-                            <Button
-                                onClick={handleAnalyze}
-                                disabled={isAnalyzing || !script.trim()}
-                                className="w-full h-12 text-lg font-semibold"
-                            >
-                                {isAnalyzing ? (
-                                    <>
-                                        <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
-                                        Analyzing Script...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Sparkles className="w-5 h-5 mr-2" />
-                                        Analyze Script
-                                    </>
-                                )}
-                            </Button>
+
+                            {/* Char counter + Analyze Button */}
+                            <div className="flex items-center justify-between gap-4">
+                                <span className={`text-xs font-mono ${script.length > MAX_CHARS * 0.9 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                                    {script.length.toLocaleString()} / {MAX_CHARS.toLocaleString()} chars
+                                </span>
+                                <Button
+                                    onClick={handleAnalyze}
+                                    disabled={isAnalyzing || !script.trim()}
+                                    className="flex-1 max-w-md h-12 text-lg font-semibold"
+                                >
+                                    {isAnalyzing ? (
+                                        <>
+                                            <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
+                                            Analyzing Script...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Sparkles className="w-5 h-5 mr-2" />
+                                            Analyze Script
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
                         </CardContent>
                     </Card>
 
