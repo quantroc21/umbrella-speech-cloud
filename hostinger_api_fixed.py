@@ -495,46 +495,36 @@ class ScriptRequest(BaseModel):
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
 
-# Genre-specific Average Shot Length (ASL) guidance
+# Genre-specific visual style guidance (NO hard segment caps)
 GENRE_GUIDE = {
     "documentary": {
         "label": "Documentary",
-        "asl": "5–8 seconds",
-        "max_segments": 10,
-        "style": "Cinematic, slow, contemplative. Wide establishing shots, detailed close-ups, natural lighting."
+        "style": "Cinematic, slow, contemplative. Wide establishing shots, detailed close-ups, natural lighting. Warm color grading."
     },
     "youtube_faceless": {
         "label": "YouTube Faceless",
-        "asl": "1.5–3 seconds",
-        "max_segments": 10,
-        "style": "Fast-paced, punchy, high-energy. Dynamic transitions, bold visuals, trending aesthetic."
+        "style": "Fast-paced, punchy, high-energy. Dynamic transitions, bold visuals, trending aesthetic. Vibrant saturated colors."
     },
     "marketing": {
         "label": "Marketing / Ad",
-        "asl": "2–3 seconds",
-        "max_segments": 10,
-        "style": "Premium, polished, aspirational. Clean compositions, professional lighting, brand-safe."
+        "style": "Premium, polished, aspirational. Clean compositions, professional lighting, brand-safe. Sleek modern aesthetic."
     },
     "educational": {
         "label": "Educational",
-        "asl": "6–10 seconds",
-        "max_segments": 8,
-        "style": "Clear, informative, illustrative. Diagrams, demonstrations, step-by-step visuals."
+        "style": "Clear, informative, illustrative. Diagrams, demonstrations, step-by-step visuals. Bright even lighting."
     },
     "general": {
         "label": "General Cinematic",
-        "asl": "6–15 seconds",
-        "max_segments": 10,
-        "style": "Professional, versatile, visually rich. Balanced pacing, high production value."
+        "style": "Professional, versatile, visually rich. Balanced pacing, high production value. Cinematic color grading."
     },
 }
 
 @app.post("/api/ai-keywords")
 async def generate_ai_keywords(request: ScriptRequest, user=Depends(get_current_user)):
     """Analyze a TTS script and return optimized B-roll visual keywords using DeepSeek.
-    Optimized for long scripts (3,000-5,000 chars) with genre-aware scene segmentation."""
+    Automatic time-based segmentation: 10-15 seconds per scene, no hard caps."""
     
-    # 1. HEAVY LOGGING (Requirement #1)
+    # === HEAVY LOGGING ===
     logger.info("="*50)
     logger.info(f"AI KEYWORDS REQUEST INITIATED BY USER: {user.id}")
     logger.info(f"SCRIPT LENGTH: {len(request.script)} characters")
@@ -548,8 +538,6 @@ async def generate_ai_keywords(request: ScriptRequest, user=Depends(get_current_
         return _fallback_response("Script is empty.")
     if len(script_text) < 10:
         return _fallback_response("Script is too short (minimum 10 characters).")
-    if len(script_text) > 5000:
-        return _fallback_response("Script is too long (maximum 5,000 characters). Please shorten your script.")
 
     # Check API key
     if not DEEPSEEK_API_KEY:
@@ -558,6 +546,13 @@ async def generate_ai_keywords(request: ScriptRequest, user=Depends(get_current_
 
     logger.info(f"DeepSeek API key present: {DEEPSEEK_API_KEY[:8]}...")
 
+    # === AUTOMATIC TIME-BASED ESTIMATION ===
+    word_count = len(script_text.split())
+    estimated_total_seconds = (word_count / 150.0) * 60  # ~150 words per minute
+    estimated_segments = max(3, round(estimated_total_seconds / 12.5))  # ~12.5s avg per scene (midpoint of 10-15)
+    
+    logger.info(f"WORD COUNT: {word_count}, EST DURATION: {estimated_total_seconds:.0f}s, TARGET SEGMENTS: {estimated_segments}")
+
     # Get genre config (fallback to general)
     genre_key = request.genre.lower().strip()
     genre = GENRE_GUIDE.get(genre_key, GENRE_GUIDE["general"])
@@ -565,27 +560,31 @@ async def generate_ai_keywords(request: ScriptRequest, user=Depends(get_current_
     system_prompt = f"""You are a professional B-roll visual keyword generator for stock footage search.
 
 === YOUR TASK ===
-Analyze the user's voiceover script and break it into MEANINGFUL VISUAL SCENES for B-roll footage.
+Analyze the user's voiceover script and break it into visual scenes of approximately 10-15 seconds each.
+For every scene, create highly descriptive cinematic search keywords optimized for stock footage.
+Focus on subject, action, setting, mood, lighting, and camera movement.
+Output only visual scene descriptions.
+
+=== ESTIMATION ===
+This script is approximately {word_count} words, which at ~150 words per minute equals ~{estimated_total_seconds:.0f} seconds of audio.
+You should create approximately {estimated_segments} visual scenes, each covering ~10-15 seconds of the voiceover.
 
 === VIDEO GENRE: {genre["label"]} ===
-- Average Shot Length (ASL): {genre["asl"]}
 - Visual Style: {genre["style"]}
 
 === CRITICAL RULES ===
-1. SEGMENT BY LOGICAL VISUAL SCENES — NOT by individual sentences or periods.
-   Group related sentences that describe the same visual concept into ONE segment.
-2. Maximum {genre["max_segments"]} segments total, minimum 3 segments.
-   For scripts under 500 characters: 3-5 segments.
-   For scripts 500-2000 characters: 4-7 segments.
-   For scripts 2000-5000 characters: 6-{genre["max_segments"]} segments.
-3. Each segment should represent 6-15 seconds of video time.
-4. estimated_seconds must be between 6 and 15 (integer).
-5. search_query must be natural, highly searchable English (8-15 words max).
-   Optimized for stock footage sites like Pexels, Pixabay, Coverr.
+1. SEGMENT BY LOGICAL VISUAL SCENES — group related sentences that share the same visual concept.
+2. Each scene should cover approximately 10-15 seconds of voiceover time.
+3. Create as many scenes as needed to cover the ENTIRE script. Do NOT skip any part of the script.
+4. estimated_seconds must be an integer between 10 and 15 for each scene.
+5. search_query MUST be a pure cinematic visual description (8-15 words). 
+   NEVER use questions. NEVER use "how to" or "what is". Only describe what the camera SEES.
+   Good: "Aerial drone shot of golden sunset over calm ocean waves"
+   Bad: "How does the ocean look at sunset?"
 6. NEVER mention brand names, logos, copyrighted characters, or trademarks.
 7. NEVER hallucinate visual details not supported by the script.
 8. The "text" field must contain the EXACT original text from the script for that segment.
-9. Prioritize CINEMATIC QUALITY and VISUAL CONSISTENCY across all segments.
+9. Prioritize CINEMATIC QUALITY — describe lighting, camera angles, and movement when relevant.
 10. Output ONLY a valid JSON object. No explanations, no markdown, no code fences.
 
 === JSON SCHEMA ===
@@ -595,22 +594,22 @@ Analyze the user's voiceover script and break it into MEANINGFUL VISUAL SCENES f
     {{
       "segment_id": integer (starting from 1),
       "text": "exact original text from the script for this segment",
-      "estimated_seconds": integer (6-15),
+      "estimated_seconds": integer (10-15),
       "keywords": {{
         "subject": "main visual subject (person, object, concept)",
-        "action": "what is happening visually",
-        "setting": "location or environment",
-        "mood_style": "cinematic mood and visual style",
-        "search_query": "natural searchable English query for stock footage sites"
+        "action": "what is happening visually (verb phrase describing motion or state)",
+        "setting": "location or environment with lighting details",
+        "mood_style": "cinematic mood, color grading, and visual tone",
+        "search_query": "pure cinematic visual description for stock footage search (NO questions)"
       }}
     }}
   ]
 }}"""
 
-    # Call DeepSeek API
+    # Call DeepSeek API (120s timeout for long scripts with many segments)
     try:
-        async with httpx.AsyncClient(timeout=90.0) as client:
-            logger.info("Sending request to DeepSeek API...")
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            logger.info(f"Sending request to DeepSeek API (target: {estimated_segments} segments)...")
             response = await client.post(
                 "https://api.deepseek.com/chat/completions",
                 headers={
@@ -624,7 +623,8 @@ Analyze the user's voiceover script and break it into MEANINGFUL VISUAL SCENES f
                         {"role": "user", "content": script_text}
                     ],
                     "response_format": {"type": "json_object"},
-                    "temperature": 0.6
+                    "temperature": 0.6,
+                    "max_tokens": 8192
                 }
             )
             logger.info(f"DeepSeek response status: {response.status_code}")
@@ -654,21 +654,15 @@ Analyze the user's voiceover script and break it into MEANINGFUL VISUAL SCENES f
     except json.JSONDecodeError as e:
         logger.warning(f"Standard JSON parse failed. Attempting regex extraction. Error: {e}")
         try:
-            # Look for JSON block inside markdown or raw text
-            json_match = re.search(r'\{(?:[^{}]|(?R))*\}', content, re.DOTALL)
-            if json_match:
-                parsed = json.loads(json_match.group(0))
+            start_idx = content.find('{')
+            end_idx = content.rfind('}')
+            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                parsed = json.loads(content[start_idx:end_idx+1])
             else:
-                # Try finding the first { and last }
-                start_idx = content.find('{')
-                end_idx = content.rfind('}')
-                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-                    parsed = json.loads(content[start_idx:end_idx+1])
-                else:
-                    raise ValueError("No JSON-like structure found")
+                raise ValueError("No JSON-like structure found")
         except Exception as regex_e:
             logger.error(f"Regex JSON parse failed: {traceback.format_exc()}")
-            logger.error(f"Raw content: {content[:1000]}") # Log more for debugging
+            logger.error(f"Raw content: {content[:1000]}")
             return _fallback_response("AI returned invalid JSON. Please try again.")
 
     # Validate structure
@@ -681,24 +675,20 @@ Analyze the user's voiceover script and break it into MEANINGFUL VISUAL SCENES f
         logger.error("AI returned empty segments array.")
         return _fallback_response("AI generated no segments. Please try a different script.")
 
-    # Cap segments at max allowed for genre
-    max_segs = genre["max_segments"]
-    if len(parsed["segments"]) > max_segs:
-        logger.warning(f"AI returned {len(parsed['segments'])} segments, capping to {max_segs}")
-        parsed["segments"] = parsed["segments"][:max_segs]
+    # NO hard cap on segments — let the AI generate as many as the script needs
 
     # Validate and clean up each segment
-    for code, seg in enumerate(parsed["segments"]):
-        seg["segment_id"] = code + 1
+    for idx, seg in enumerate(parsed["segments"]):
+        seg["segment_id"] = idx + 1
         
         # Ensure keywords object exists
         if "keywords" not in seg or not isinstance(seg["keywords"], dict):
             seg["keywords"] = {
                 "subject": "Main Subject",
-                "action": "Talking",
-                "setting": "Studio",
-                "mood_style": "Cinematic",
-                "search_query": "Cinematic stock footage"
+                "action": "Moving through scene",
+                "setting": "Cinematic environment",
+                "mood_style": "Cinematic, professional",
+                "search_query": "Cinematic stock footage professional scene"
             }
             
         # Ensure required keyword fields exist
@@ -707,12 +697,12 @@ Analyze the user's voiceover script and break it into MEANINGFUL VISUAL SCENES f
              if field not in keywords:
                  keywords[field] = "N/A"
 
-        # Clamp estimated_seconds to 6-15 range safely
+        # Clamp estimated_seconds to 10-15 range safely
         try:
-             est_sec = int(seg.get("estimated_seconds", 10))
-             seg["estimated_seconds"] = max(6, min(15, est_sec))
+             est_sec = int(seg.get("estimated_seconds", 12))
+             seg["estimated_seconds"] = max(10, min(15, est_sec))
         except (ValueError, TypeError):
-             seg["estimated_seconds"] = 10
+             seg["estimated_seconds"] = 12
              
         # Ensure text exists
         if "text" not in seg:
@@ -721,7 +711,7 @@ Analyze the user's voiceover script and break it into MEANINGFUL VISUAL SCENES f
     if "overall_theme" not in parsed:
          parsed["overall_theme"] = "Cinematic Video Presentation"
 
-    logger.info(f"AI Keywords success: {len(parsed['segments'])} segments generated for genre '{genre_key}'")
+    logger.info(f"AI Keywords success: {len(parsed['segments'])} segments generated for genre '{genre_key}' (target was {estimated_segments})")
     return parsed
 
 def _fallback_response(message: str):
@@ -733,13 +723,13 @@ def _fallback_response(message: str):
             {
                 "segment_id": 1,
                 "text": "Fallback generated due to AI processing error.",
-                "estimated_seconds": 10,
+                "estimated_seconds": 12,
                 "keywords": {
                     "subject": "Error",
                     "action": "Processing",
                     "setting": "System",
                     "mood_style": "Neutral",
-                    "search_query": "Abstract technology background"
+                    "search_query": "Abstract technology background cinematic scene"
                 }
             }
         ]
