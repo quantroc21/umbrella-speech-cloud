@@ -581,27 +581,28 @@ async def generate_ai_keywords(request: ScriptRequest, user=Depends(get_current_
         genre = GENRE_GUIDE.get(genre_key, GENRE_GUIDE["general"])
 
         # 2. Lightweight AI Processing (Query Generation Only)
-        system_prompt = f"""You are a professional B-roll cinematic keyword generator.
-I will give you {num_segments} numbered text segments from a script.
-For EACH segment, write exactly ONE highly descriptive cinematic search query (8-15 words) optimized for stock footage.
+        system_prompt = f"""You are an elite B-roll cinematic keyword generator specializing in professional stock footage platforms (Artlist, Shutterstock, Getty, Pond5).
+I will give you {num_segments} numbered text segments from a voiceover script.
+For EACH segment, write exactly ONE highly specific, cinematic search query (10-20 words) optimized for professional stock footage search engines.
 
 === VIDEO GENRE: {genre["label"]} ===
 Visual Style: {genre["style"]}
 
 === ABSOLUTE RULES FOR search_query ===
-1. MUST be a pure cinematic visual description of what a camera sees.
-2. NEVER use questions. NEVER start with How, Why, What, When, Where, Who, Do, Does, Is, Are.
-3. Good: "commercial airplane flying through dramatic golden hour clouds with lens flare"
-4. Good: "passengers walking through busy airport security checkpoint at night with blue lighting"
-5. Bad: "How do airplanes fly through clouds?" (BANNED)
+1. MUST be a pure visual description of what a camera sees.
+2. Focus heavily on: subject, action, setting, mood, lighting, time of day, camera movement, color palette, and emotional atmosphere.
+3. NEVER use questions. NEVER start with How, Why, What, When, Where, Who, Do, Does, Is, Are.
+4. Good: "dramatic commercial airplane flying through golden hour clouds with lens flare and slow motion, cinematic aerial shot, warm tones"
+5. Good: "diverse passengers walking through busy airport security checkpoint at night, cinematic shallow depth of field, dramatic blue neon lighting"
+6. Bad: "How do airplanes fly through clouds?" (BANNED)
 
 === JSON SCHEMA ===
 Output ONLY a valid JSON object containing an array of strings. The array MUST have exactly {num_segments} strings. No markdown.
 {{
-  "overall_theme": "one sentence cinematic theme description",
+  "overall_theme": "one sentence cinematic theme describing the emotional atmosphere and visual style",
   "queries": [
-    "cinematic query for segment 1",
-    "cinematic query for segment 2"
+    "cinematic Artlist-style query for segment 1",
+    "cinematic Artlist-style query for segment 2"
   ]
 }}"""
 
@@ -671,7 +672,7 @@ Output ONLY a valid JSON object containing an array of strings. The array MUST h
             
             # Post-processing Sanitizer
             if safe_query.lower().startswith(question_starters) or safe_query.endswith("?"):
-                safe_query = "cinematic stock footage of " + genre.get("label", "professional scene")
+                safe_query = f"cinematic stock footage of {genre.get('label', 'professional scene')}, dramatic lighting, smooth camera movement, high quality"
                 logger.warning(f"Segment {idx+1}: Sanitized question search_query to: {safe_query}")
                 
             final_segments.append({
@@ -713,7 +714,7 @@ def _fallback_response(message: str):
                     "action": "Processing",
                     "setting": "System",
                     "mood_style": "Neutral",
-                    "search_query": "abstract technology background cinematic scene"
+                    "search_query": "cinematic stock footage, dramatic lighting, high quality 4k, smooth camera movement"
                 }
             }
         ]
