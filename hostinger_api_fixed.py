@@ -611,11 +611,58 @@ Output ONLY a valid JSON object containing an array of strings. The array MUST h
             # Truncate extremely long single sentences to save tokens
             user_prompt += f"[{i+1}] {seg[:500]}\n"
 
-        # Call DeepSeek API with STRICT 24s timeout to prevent 504 Gateway Timeout
+        # === SMART PYTHON KEYWORD EXTRACTOR (used when AI fails or times out) ===
+        STOP_WORDS = {"the","a","an","is","are","was","were","be","been","being","have","has","had",
+            "do","does","did","will","would","could","should","may","might","shall","can",
+            "this","that","these","those","it","its","i","you","he","she","we","they","my",
+            "your","his","her","our","their","me","him","us","them","what","which","who",
+            "when","where","how","why","if","but","or","and","not","no","so","too","very",
+            "just","about","above","after","again","all","also","am","any","as","at","back",
+            "because","before","below","between","both","by","come","day","each","even",
+            "first","for","from","get","give","go","good","great","her","here","high",
+            "in","into","know","like","long","look","make","many","more","most","new",
+            "now","of","off","old","on","one","only","other","out","over","own","part",
+            "people","place","put","right","same","say","see","she","show","side","since",
+            "small","some","something","still","such","take","tell","than","then","there",
+            "thing","think","time","to","try","turn","two","under","up","us","use","want",
+            "way","well","with","work","world","year","much","need","must","let","through"}
+        
+        CINEMATIC_MODIFIERS = [
+            "cinematic wide shot", "dramatic lighting", "slow motion",
+            "shallow depth of field", "golden hour", "aerial drone shot",
+            "warm color grading", "professional 4K footage", "smooth camera movement",
+            "moody atmosphere", "blue hour lighting", "tracking shot",
+            "close-up detail shot", "silhouette against bright sky"
+        ]
+        
+        def _extract_cinematic_query(text_segment: str, genre_style: str, segment_index: int) -> str:
+            """Extract meaningful keywords from text and build a cinematic stock footage query."""
+            words = re.findall(r'[a-zA-Z]+', text_segment.lower())
+            # Get unique meaningful words (4+ chars, not stop words)
+            keywords = []
+            seen = set()
+            for w in words:
+                if w not in STOP_WORDS and len(w) >= 4 and w not in seen:
+                    keywords.append(w)
+                    seen.add(w)
+                    if len(keywords) >= 6:  # Cap at 6 content words
+                        break
+            
+            if not keywords:
+                keywords = ["professional", "scene"]
+            
+            # Pick 2 cinematic modifiers (rotate based on segment index)
+            mod1 = CINEMATIC_MODIFIERS[segment_index % len(CINEMATIC_MODIFIERS)]
+            mod2 = CINEMATIC_MODIFIERS[(segment_index + 3) % len(CINEMATIC_MODIFIERS)]
+            
+            query = f"{' '.join(keywords)}, {mod1}, {mod2}, {genre_style}"
+            return query
+
+        # Call DeepSeek API with 50s timeout (lightweight query-only payload is fast)
         parsed = None
         start_time = time.time()
         try:
-            async with httpx.AsyncClient(timeout=24.0) as client:
+            async with httpx.AsyncClient(timeout=50.0) as client:
                 logger.info(f"Sending lightweight request to DeepSeek API ({num_segments} queries)...")
                 response = await client.post(
                     "https://api.deepseek.com/chat/completions",
@@ -631,29 +678,31 @@ Output ONLY a valid JSON object containing an array of strings. The array MUST h
                         ],
                         "response_format": {"type": "json_object"},
                         "temperature": 0.4,
-                        "max_tokens": 2048 # Reduced since we only want strings
+                        "max_tokens": 2048
                     }
                 )
-                logger.info(f"DeepSeek response status: {response.status_code} in {time.time() - start_time:.2f}s")
+                elapsed = time.time() - start_time
+                logger.info(f"DeepSeek response status: {response.status_code} in {elapsed:.2f}s")
                 
                 if response.status_code == 200:
                     content = response.json()["choices"][0]["message"]["content"]
+                    logger.info(f"DeepSeek content length: {len(content)}")
                     
-                    # Regex Fallback Parsing for the lightweight JSON
+                    # Parse JSON with fallback
                     try:
                         parsed = json.loads(content)
                     except json.JSONDecodeError:
-                        json_match = re.search(r'\{(?:[^{}]|(?R))*\}', content, re.DOTALL)
-                        if json_match:
-                            parsed = json.loads(json_match.group(0))
-                        else:
-                            start_idx = content.find('{')
-                            end_idx = content.rfind('}')
-                            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                        start_idx = content.find('{')
+                        end_idx = content.rfind('}')
+                        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                            try:
                                 parsed = json.loads(content[start_idx:end_idx+1])
+                            except:
+                                pass
+                else:
+                    logger.error(f"DeepSeek returned {response.status_code}: {response.text[:300]}")
         except Exception as e:
             logger.error(f"DeepSeek API call failed or timed out: {e} after {time.time() - start_time:.2f}s")
-            # Fallback to pure Python rule-based generation handled below
             pass
 
         # 3. Assemble Final Output safely
@@ -662,33 +711,49 @@ Output ONLY a valid JSON object containing an array of strings. The array MUST h
         if parsed and "queries" in parsed and isinstance(parsed["queries"], list):
             queries = parsed["queries"]
             overall_theme = parsed.get("overall_theme", overall_theme)
+            logger.info(f"AI returned {len(queries)} queries successfully.")
+        else:
+            logger.warning(f"AI returned no usable queries. Using smart Python keyword extraction.")
             
         final_segments = []
         question_starters = ("how ", "why ", "what ", "when ", "where ", "who ", "do ", "does ", "is ", "are ", "can ", "will ", "should ", "could ", "would ")
+        genre_style = genre.get("style", "Cinematic")
         
         for idx, text in enumerate(segments_text):
-            safe_query = queries[idx] if idx < len(queries) else "cinematic visual scene"
-            safe_query = str(safe_query).strip()
+            # Use AI query if available, otherwise extract from text
+            if idx < len(queries) and queries[idx] and str(queries[idx]).strip():
+                safe_query = str(queries[idx]).strip()
+            else:
+                safe_query = _extract_cinematic_query(text, genre_style, idx)
+                logger.info(f"Segment {idx+1}: Python-extracted query: {safe_query}")
             
-            # Post-processing Sanitizer
+            # Sanitize questions
             if safe_query.lower().startswith(question_starters) or safe_query.endswith("?"):
-                safe_query = f"cinematic stock footage of {genre.get('label', 'professional scene')}, dramatic lighting, smooth camera movement, high quality"
-                logger.warning(f"Segment {idx+1}: Sanitized question search_query to: {safe_query}")
+                safe_query = _extract_cinematic_query(text, genre_style, idx)
+                logger.warning(f"Segment {idx+1}: Sanitized question to: {safe_query}")
+            
+            # Reject generic/empty queries
+            if safe_query.lower() in ("cinematic visual scene", "n/a", "", "cinematic scene"):
+                safe_query = _extract_cinematic_query(text, genre_style, idx)
+                logger.warning(f"Segment {idx+1}: Replaced generic query with: {safe_query}")
                 
+            word_count = len(text.split())
+            est_seconds = max(10, min(15, round(word_count / 150.0 * 60))) if word_count > 0 else 12
+            
             final_segments.append({
                 "segment_id": idx + 1,
                 "text": text,
-                "estimated_seconds": max(10, min(15, round(len(text.split()) / 150.0 * 60) if len(text.split()) > 0 else 12)),
+                "estimated_seconds": est_seconds,
                 "keywords": {
                     "subject": "Main Subject",
                     "action": "Moving through scene",
                     "setting": "Cinematic environment",
-                    "mood_style": genre.get("style", "Cinematic"),
+                    "mood_style": genre_style,
                     "search_query": safe_query.rstrip("?").strip()
                 }
             })
 
-        logger.info(f"AI Keywords success: {len(final_segments)} segments generated natively.")
+        logger.info(f"AI Keywords success: {len(final_segments)} segments generated. AI provided {len(queries)}/{num_segments} queries.")
         return {
             "overall_theme": overall_theme,
             "segments": final_segments
