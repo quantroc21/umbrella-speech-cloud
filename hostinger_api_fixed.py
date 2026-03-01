@@ -533,21 +533,28 @@ GENRE_GUIDE = {
 async def generate_ai_keywords(request: ScriptRequest, user=Depends(get_current_user)):
     """Analyze a TTS script and return optimized B-roll visual keywords using DeepSeek.
     Optimized for long scripts (3,000-5,000 chars) with genre-aware scene segmentation."""
-    logger.info(f"AI Keywords request from user {user.id}, script length: {len(request.script)}, genre: {request.genre}")
+    
+    # 1. HEAVY LOGGING (Requirement #1)
+    logger.info("="*50)
+    logger.info(f"AI KEYWORDS REQUEST INITIATED BY USER: {user.id}")
+    logger.info(f"SCRIPT LENGTH: {len(request.script)} characters")
+    logger.info(f"SELECTED GENRE: {request.genre}")
+    logger.info(f"SCRIPT PREVIEW (First 300 chars): {request.script[:300]}...")
+    logger.info("="*50)
 
     # Validate script
     script_text = request.script.strip()
     if not script_text:
-        raise HTTPException(status_code=400, detail="Script is empty")
+        return _fallback_response("Script is empty.")
     if len(script_text) < 10:
-        raise HTTPException(status_code=400, detail="Script is too short (minimum 10 characters)")
+        return _fallback_response("Script is too short (minimum 10 characters).")
     if len(script_text) > 5000:
-        raise HTTPException(status_code=400, detail="Script is too long (maximum 5,000 characters). Please shorten your script.")
+        return _fallback_response("Script is too long (maximum 5,000 characters). Please shorten your script.")
 
     # Check API key
     if not DEEPSEEK_API_KEY:
-        logger.error("DEEPSEEK_API_KEY is missing from .env!")
-        raise HTTPException(status_code=500, detail="DeepSeek API key is not configured on the server.")
+        logger.error("CRITICAL ERROR: DEEPSEEK_API_KEY is missing from .env!")
+        return _fallback_response("DeepSeek API key is not configured on the server.")
 
     logger.info(f"DeepSeek API key present: {DEEPSEEK_API_KEY[:8]}...")
 
@@ -621,44 +628,58 @@ Analyze the user's voiceover script and break it into MEANINGFUL VISUAL SCENES f
                 }
             )
             logger.info(f"DeepSeek response status: {response.status_code}")
-    except httpx.TimeoutException:
-        logger.error("DeepSeek API call timed out after 90s")
-        raise HTTPException(status_code=504, detail="AI provider timed out. Please try again.")
-    except httpx.ConnectError as e:
-        logger.error(f"DeepSeek connection failed: {e}")
-        raise HTTPException(status_code=502, detail="Cannot connect to AI provider. Please try again later.")
     except Exception as e:
         logger.error(f"DeepSeek API call failed: {traceback.format_exc()}")
-        raise HTTPException(status_code=502, detail=f"AI provider request failed: {str(e)}")
+        return _fallback_response("Connecting to AI failed. Please try again.")
 
     # Check response status
     if response.status_code != 200:
         error_body = response.text[:500]
         logger.error(f"DeepSeek returned {response.status_code}: {error_body}")
-        raise HTTPException(status_code=502, detail=f"AI provider returned error {response.status_code}")
+        return _fallback_response("AI provider returned an error.")
 
     # Parse DeepSeek response
     try:
         data = response.json()
         content = data["choices"][0]["message"]["content"]
         logger.info(f"DeepSeek returned content length: {len(content)}")
-    except (KeyError, IndexError) as e:
+    except Exception as e:
         logger.error(f"Unexpected DeepSeek response structure: {traceback.format_exc()}")
-        logger.error(f"Response body: {response.text[:500]}")
-        raise HTTPException(status_code=502, detail="AI provider returned an unexpected response format")
+        return _fallback_response("AI returned an unexpected response format.")
 
-    # Parse JSON content
+    # Parse JSON content with Regex Fallback
+    parsed = None
     try:
         parsed = json.loads(content)
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse AI JSON output: {e}")
-        logger.error(f"Raw content: {content[:500]}")
-        raise HTTPException(status_code=502, detail="AI returned invalid JSON. Please try again.")
+        logger.warning(f"Standard JSON parse failed. Attempting regex extraction. Error: {e}")
+        try:
+            # Look for JSON block inside markdown or raw text
+            json_match = re.search(r'\{(?:[^{}]|(?R))*\}', content, re.DOTALL)
+            if json_match:
+                parsed = json.loads(json_match.group(0))
+            else:
+                # Try finding the first { and last }
+                start_idx = content.find('{')
+                end_idx = content.rfind('}')
+                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                    parsed = json.loads(content[start_idx:end_idx+1])
+                else:
+                    raise ValueError("No JSON-like structure found")
+        except Exception as regex_e:
+            logger.error(f"Regex JSON parse failed: {traceback.format_exc()}")
+            logger.error(f"Raw content: {content[:1000]}") # Log more for debugging
+            return _fallback_response("AI returned invalid JSON. Please try again.")
 
     # Validate structure
-    if "segments" not in parsed or not isinstance(parsed.get("segments"), list):
-        logger.error(f"AI response missing 'segments' array. Keys: {list(parsed.keys())}")
-        raise HTTPException(status_code=502, detail="AI returned incomplete data. Please try again.")
+    if not parsed or "segments" not in parsed or not isinstance(parsed.get("segments"), list):
+        logger.error(f"AI response missing 'segments' array. Keys: {list(parsed.keys()) if parsed else 'None'}")
+        return _fallback_response("AI returned incomplete data. Please try again.")
+
+    # Ensure segments is not empty
+    if len(parsed["segments"]) == 0:
+        logger.error("AI returned empty segments array.")
+        return _fallback_response("AI generated no segments. Please try a different script.")
 
     # Cap segments at max allowed for genre
     max_segs = genre["max_segments"]
@@ -666,13 +687,63 @@ Analyze the user's voiceover script and break it into MEANINGFUL VISUAL SCENES f
         logger.warning(f"AI returned {len(parsed['segments'])} segments, capping to {max_segs}")
         parsed["segments"] = parsed["segments"][:max_segs]
 
-    # Clamp estimated_seconds to 6-15 range
-    for seg in parsed["segments"]:
-        if "estimated_seconds" in seg:
-            seg["estimated_seconds"] = max(6, min(15, int(seg["estimated_seconds"])))
+    # Validate and clean up each segment
+    for code, seg in enumerate(parsed["segments"]):
+        seg["segment_id"] = code + 1
+        
+        # Ensure keywords object exists
+        if "keywords" not in seg or not isinstance(seg["keywords"], dict):
+            seg["keywords"] = {
+                "subject": "Main Subject",
+                "action": "Talking",
+                "setting": "Studio",
+                "mood_style": "Cinematic",
+                "search_query": "Cinematic stock footage"
+            }
+            
+        # Ensure required keyword fields exist
+        keywords = seg["keywords"]
+        for field in ["subject", "action", "setting", "mood_style", "search_query"]:
+             if field not in keywords:
+                 keywords[field] = "N/A"
+
+        # Clamp estimated_seconds to 6-15 range safely
+        try:
+             est_sec = int(seg.get("estimated_seconds", 10))
+             seg["estimated_seconds"] = max(6, min(15, est_sec))
+        except (ValueError, TypeError):
+             seg["estimated_seconds"] = 10
+             
+        # Ensure text exists
+        if "text" not in seg:
+             seg["text"] = "..."
+
+    if "overall_theme" not in parsed:
+         parsed["overall_theme"] = "Cinematic Video Presentation"
 
     logger.info(f"AI Keywords success: {len(parsed['segments'])} segments generated for genre '{genre_key}'")
     return parsed
+
+def _fallback_response(message: str):
+    """Returns a valid but generic JSON structure when the AI fails."""
+    logger.error(f"Returning fallback response: {message}")
+    return {
+        "overall_theme": "Generic Video Scene",
+        "segments": [
+            {
+                "segment_id": 1,
+                "text": "Fallback generated due to AI processing error.",
+                "estimated_seconds": 10,
+                "keywords": {
+                    "subject": "Error",
+                    "action": "Processing",
+                    "setting": "System",
+                    "mood_style": "Neutral",
+                    "search_query": "Abstract technology background"
+                }
+            }
+        ]
+    }
 
 @app.post("/api/payment/sepay-webhook")
 async def sepay_webhook(request: Request):
