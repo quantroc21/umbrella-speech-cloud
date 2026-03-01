@@ -548,73 +548,74 @@ async def generate_ai_keywords(request: ScriptRequest, user=Depends(get_current_
 
         logger.info(f"DeepSeek API key present: {DEEPSEEK_API_KEY[:8]}...")
 
-        # === AUTOMATIC TIME-BASED ESTIMATION ===
-        word_count = len(script_text.split())
-        estimated_total_seconds = (word_count / 150.0) * 60  # ~150 words per minute
-        estimated_segments = max(3, round(estimated_total_seconds / 12.5))  # ~12.5s avg per scene
+        # === HYBRID FAST SEGMENTATION (Python + AI) ===
+        import re
+        import time
         
-        logger.info(f"WORD COUNT: {word_count}, EST DURATION: {estimated_total_seconds:.0f}s, TARGET SEGMENTS: {estimated_segments}")
+        # 1. Fast Python Rule-Based Segmentation
+        # Split by sentence endings (.?!) followed by space
+        sentences = re.split(r'(?<=[.!?])\s+', script_text)
+        segments_text = []
+        current_chunk = []
+        current_count = 0
+        
+        for sent in sentences:
+            if not sent.strip(): continue
+            words = sent.split()
+            if current_count + len(words) > 30 and current_chunk: # ~12 seconds per chunk at 150wpm
+                segments_text.append(" ".join(current_chunk))
+                current_chunk = [sent]
+                current_count = len(words)
+            else:
+                current_chunk.append(sent)
+                current_count += len(words)
+                
+        if current_chunk:
+            segments_text.append(" ".join(current_chunk))
+            
+        num_segments = len(segments_text)
+        logger.info(f"PYTHON SEGMENTATION: {num_segments} scenes created instantly.")
 
         # Get genre config (fallback to general)
         genre_key = request.genre.lower().strip()
         genre = GENRE_GUIDE.get(genre_key, GENRE_GUIDE["general"])
 
-        system_prompt = f"""Break the script into visual scenes of 10-15 seconds each. For each scene, create a highly descriptive cinematic search query optimized for stock footage. Focus only on visual elements: subject, action, setting, mood, lighting, and camera movement. Output only pure visual descriptions, never questions.
-
-=== ESTIMATION ===
-This script is approximately {word_count} words = ~{estimated_total_seconds:.0f} seconds of audio.
-Create approximately {estimated_segments} visual scenes, each covering ~10-15 seconds.
+        # 2. Lightweight AI Processing (Query Generation Only)
+        system_prompt = f"""You are a professional B-roll cinematic keyword generator.
+I will give you {num_segments} numbered text segments from a script.
+For EACH segment, write exactly ONE highly descriptive cinematic search query (8-15 words) optimized for stock footage.
 
 === VIDEO GENRE: {genre["label"]} ===
 Visual Style: {genre["style"]}
 
 === ABSOLUTE RULES FOR search_query ===
-search_query MUST be a PURE CINEMATIC VISUAL DESCRIPTION describing what a camera sees.
-search_query must NEVER be a question. NEVER start with How, Why, What, When, Where, Who, Do, Does, Is, Are, Can, Will, Should.
-
-CORRECT search_query examples:
-- "commercial airplane flying through dramatic golden hour clouds with lens flare"
-- "passengers walking through busy airport security checkpoint with dramatic blue lighting"
-- "close-up of pilot hands adjusting cockpit instruments with warm amber glow"
-- "aerial drone shot of highway traffic flowing through modern city at dusk"
-- "woman typing on laptop in minimalist home office with soft natural window light"
-
-WRONG search_query examples (NEVER do this):
-- "How do airplanes fly through clouds?" ← BANNED
-- "Why is the airport busy?" ← BANNED
-- "What does a pilot do in the cockpit?" ← BANNED
-
-=== OTHER RULES ===
-1. Group related sentences into ONE visual scene (10-15 seconds each).
-2. Create as many scenes as needed. Do NOT skip any part of the script.
-3. estimated_seconds must be an integer between 10 and 15.
-4. NEVER mention brand names, logos, or trademarks.
-5. "text" field = EXACT original text from the script for that segment.
-6. Output ONLY valid JSON. No markdown, no explanations.
+1. MUST be a pure cinematic visual description of what a camera sees.
+2. NEVER use questions. NEVER start with How, Why, What, When, Where, Who, Do, Does, Is, Are.
+3. Good: "commercial airplane flying through dramatic golden hour clouds with lens flare"
+4. Good: "passengers walking through busy airport security checkpoint at night with blue lighting"
+5. Bad: "How do airplanes fly through clouds?" (BANNED)
 
 === JSON SCHEMA ===
+Output ONLY a valid JSON object containing an array of strings. The array MUST have exactly {num_segments} strings. No markdown.
 {{
   "overall_theme": "one sentence cinematic theme description",
-  "segments": [
-    {{
-      "segment_id": integer,
-      "text": "exact script text for this scene",
-      "estimated_seconds": integer (10-15),
-      "keywords": {{
-        "subject": "main visual subject",
-        "action": "visual action or motion",
-        "setting": "location with lighting",
-        "mood_style": "cinematic mood and color tone",
-        "search_query": "pure cinematic visual description for stock footage (NEVER a question)"
-      }}
-    }}
+  "queries": [
+    "cinematic query for segment 1",
+    "cinematic query for segment 2"
   ]
 }}"""
 
-        # Call DeepSeek API (120s timeout for long scripts)
+        user_prompt = "Here are the script segments:\n"
+        for i, seg in enumerate(segments_text):
+            # Truncate extremely long single sentences to save tokens
+            user_prompt += f"[{i+1}] {seg[:500]}\n"
+
+        # Call DeepSeek API with STRICT 24s timeout to prevent 504 Gateway Timeout
+        parsed = None
+        start_time = time.time()
         try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                logger.info(f"Sending request to DeepSeek API (target: {estimated_segments} segments)...")
+            async with httpx.AsyncClient(timeout=24.0) as client:
+                logger.info(f"Sending lightweight request to DeepSeek API ({num_segments} queries)...")
                 response = await client.post(
                     "https://api.deepseek.com/chat/completions",
                     headers={
@@ -625,107 +626,72 @@ WRONG search_query examples (NEVER do this):
                         "model": "deepseek-chat",
                         "messages": [
                             {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": script_text}
+                            {"role": "user", "content": user_prompt}
                         ],
                         "response_format": {"type": "json_object"},
                         "temperature": 0.4,
-                        "max_tokens": 8192
+                        "max_tokens": 2048 # Reduced since we only want strings
                     }
                 )
-                logger.info(f"DeepSeek response status: {response.status_code}")
+                logger.info(f"DeepSeek response status: {response.status_code} in {time.time() - start_time:.2f}s")
+                
+                if response.status_code == 200:
+                    content = response.json()["choices"][0]["message"]["content"]
+                    
+                    # Regex Fallback Parsing for the lightweight JSON
+                    try:
+                        parsed = json.loads(content)
+                    except json.JSONDecodeError:
+                        json_match = re.search(r'\{(?:[^{}]|(?R))*\}', content, re.DOTALL)
+                        if json_match:
+                            parsed = json.loads(json_match.group(0))
+                        else:
+                            start_idx = content.find('{')
+                            end_idx = content.rfind('}')
+                            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                                parsed = json.loads(content[start_idx:end_idx+1])
         except Exception as e:
-            logger.error(f"DeepSeek API call failed: {traceback.format_exc()}")
-            return _fallback_response("Connecting to AI failed. Please try again.")
+            logger.error(f"DeepSeek API call failed or timed out: {e} after {time.time() - start_time:.2f}s")
+            # Fallback to pure Python rule-based generation handled below
+            pass
 
-        # Check response status
-        if response.status_code != 200:
-            error_body = response.text[:500]
-            logger.error(f"DeepSeek returned {response.status_code}: {error_body}")
-            return _fallback_response("AI provider returned an error.")
-
-        # Parse DeepSeek response
-        try:
-            data = response.json()
-            content = data["choices"][0]["message"]["content"]
-            logger.info(f"DeepSeek returned content length: {len(content)}")
-        except Exception as e:
-            logger.error(f"Unexpected DeepSeek response structure: {traceback.format_exc()}")
-            return _fallback_response("AI returned an unexpected response format.")
-
-        # Parse JSON content with Regex Fallback
-        parsed = None
-        try:
-            parsed = json.loads(content)
-        except json.JSONDecodeError as e:
-            logger.warning(f"Standard JSON parse failed. Attempting extraction. Error: {e}")
-            try:
-                start_idx = content.find('{')
-                end_idx = content.rfind('}')
-                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-                    parsed = json.loads(content[start_idx:end_idx+1])
-                else:
-                    raise ValueError("No JSON-like structure found")
-            except Exception as regex_e:
-                logger.error(f"JSON extraction failed: {traceback.format_exc()}")
-                logger.error(f"Raw content: {content[:1000]}")
-                return _fallback_response("AI returned invalid JSON. Please try again.")
-
-        # Validate structure
-        if not parsed or "segments" not in parsed or not isinstance(parsed.get("segments"), list):
-            logger.error(f"AI response missing 'segments' array. Keys: {list(parsed.keys()) if parsed else 'None'}")
-            return _fallback_response("AI returned incomplete data. Please try again.")
-
-        if len(parsed["segments"]) == 0:
-            logger.error("AI returned empty segments array.")
-            return _fallback_response("AI generated no segments. Please try a different script.")
-
-        # === POST-PROCESSING: Sanitize every segment ===
+        # 3. Assemble Final Output safely
+        overall_theme = "Cinematic Video Presentation"
+        queries = []
+        if parsed and "queries" in parsed and isinstance(parsed["queries"], list):
+            queries = parsed["queries"]
+            overall_theme = parsed.get("overall_theme", overall_theme)
+            
+        final_segments = []
         question_starters = ("how ", "why ", "what ", "when ", "where ", "who ", "do ", "does ", "is ", "are ", "can ", "will ", "should ", "could ", "would ")
         
-        for idx, seg in enumerate(parsed["segments"]):
-            seg["segment_id"] = idx + 1
+        for idx, text in enumerate(segments_text):
+            safe_query = queries[idx] if idx < len(queries) else "cinematic visual scene"
+            safe_query = str(safe_query).strip()
             
-            # Ensure keywords object exists
-            if "keywords" not in seg or not isinstance(seg["keywords"], dict):
-                seg["keywords"] = {
+            # Post-processing Sanitizer
+            if safe_query.lower().startswith(question_starters) or safe_query.endswith("?"):
+                safe_query = "cinematic stock footage of " + genre.get("label", "professional scene")
+                logger.warning(f"Segment {idx+1}: Sanitized question search_query to: {safe_query}")
+                
+            final_segments.append({
+                "segment_id": idx + 1,
+                "text": text,
+                "estimated_seconds": max(10, min(15, round(len(text.split()) / 150.0 * 60) if len(text.split()) > 0 else 12)),
+                "keywords": {
                     "subject": "Main Subject",
                     "action": "Moving through scene",
-                    "setting": "Cinematic environment with dramatic lighting",
-                    "mood_style": "Cinematic, professional, warm tones",
-                    "search_query": "cinematic stock footage dramatic lighting professional scene"
+                    "setting": "Cinematic environment",
+                    "mood_style": genre.get("style", "Cinematic"),
+                    "search_query": safe_query.rstrip("?").strip()
                 }
-                
-            keywords = seg["keywords"]
-            
-            # Ensure required keyword fields exist
-            for field in ["subject", "action", "setting", "mood_style", "search_query"]:
-                 if field not in keywords:
-                     keywords[field] = "N/A"
+            })
 
-            # === CRITICAL: Sanitize search_query — strip questions ===
-            sq = str(keywords.get("search_query", "")).strip()
-            if sq.lower().startswith(question_starters) or sq.endswith("?"):
-                # Rebuild from other keyword fields
-                sq = f"{keywords.get('subject', 'scene')} {keywords.get('action', 'moving')} in {keywords.get('setting', 'cinematic environment')} with {keywords.get('mood_style', 'dramatic lighting')}"
-                logger.warning(f"Segment {idx+1}: Sanitized question search_query to: {sq}")
-            keywords["search_query"] = sq.rstrip("?").strip()
-
-            # Clamp estimated_seconds to 10-15
-            try:
-                 est_sec = int(seg.get("estimated_seconds", 12))
-                 seg["estimated_seconds"] = max(10, min(15, est_sec))
-            except (ValueError, TypeError):
-                 seg["estimated_seconds"] = 12
-                 
-            # Ensure text exists
-            if "text" not in seg:
-                 seg["text"] = "..."
-
-        if "overall_theme" not in parsed:
-             parsed["overall_theme"] = "Cinematic Video Presentation"
-
-        logger.info(f"AI Keywords success: {len(parsed['segments'])} segments generated for genre '{genre_key}' (target was {estimated_segments})")
-        return parsed
+        logger.info(f"AI Keywords success: {len(final_segments)} segments generated natively.")
+        return {
+            "overall_theme": overall_theme,
+            "segments": final_segments
+        }
         
     except Exception as master_error:
         # === MASTER CATCH — guarantees no 500 error EVER ===
