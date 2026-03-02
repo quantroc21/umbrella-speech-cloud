@@ -558,8 +558,8 @@ async def generate_ai_keywords(request: ScriptRequest, user=Depends(get_current_
         
         # Calculate words-per-segment to stay within 12 segments max
         total_words = len(script_text.split())
-        target_segments = min(12, max(3, round(total_words / 37.5)))  # ~37.5 words = ~15s at 150wpm
-        words_per_segment = max(30, total_words // target_segments)
+        target_segments = min(12, max(3, round(total_words / 18.75)))  # ~18.75 words = ~7.5s at 150wpm
+        words_per_segment = max(12, total_words // target_segments)
         
         segments_text = []
         current_chunk = []
@@ -598,7 +598,7 @@ async def generate_ai_keywords(request: ScriptRequest, user=Depends(get_current_
         genre = GENRE_GUIDE.get(genre_key, GENRE_GUIDE["general"])
 
         # 2. AI Prompt — 4-Block Keyword Cluster Method
-        system_prompt = f"""Analyze the script and break it into logical visual scenes of 10-15 seconds each. For each scene, extract a clean keyword cluster optimized for stock footage search engines. Use only concrete nouns, verbs, and technical terms. Follow the 4-Block Method:
+        system_prompt = f"""Analyze the script and break it into logical visual scenes of 5-10 seconds each. For each scene, extract a clean keyword cluster optimized for stock footage search engines. Use only concrete nouns, verbs, and technical terms. Follow the 4-Block Method:
 
 1. Subject (main object/person with details)
 2. Action (physical movement)
@@ -762,7 +762,7 @@ Output ONLY valid JSON. No markdown.
                 safe_query = " ".join(query_words[:18])
                 
             word_count = len(text.split())
-            est_seconds = max(10, min(15, round(word_count / 150.0 * 60))) if word_count > 0 else 12
+            est_seconds = max(5, min(10, round(word_count / 150.0 * 60))) if word_count > 0 else 7
             
             final_segments.append({
                 "segment_id": idx + 1,
@@ -797,7 +797,7 @@ def _fallback_response(message: str):
             {
                 "segment_id": 1,
                 "text": f"Fallback: {message}",
-                "estimated_seconds": 12,
+                "estimated_seconds": 7,
                 "keywords": {
                     "subject": "Error",
                     "action": "Processing",
