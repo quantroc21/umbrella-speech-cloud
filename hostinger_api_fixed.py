@@ -552,13 +552,13 @@ async def generate_ai_keywords(request: ScriptRequest, user=Depends(get_current_
         import re
         import time
         
-        # 1. Smart Segmentation (max 12 segments)
+        # 1. Smart Segmentation (no segment limit)
         sentences = re.split(r'(?<=[.!?])\s+', script_text)
         sentences = [s.strip() for s in sentences if s.strip()]
         
-        # Calculate words-per-segment to stay within 12 segments max
+        # Calculate words-per-segment (~7.5s average at 150wpm)
         total_words = len(script_text.split())
-        target_segments = min(12, max(3, round(total_words / 18.75)))  # ~18.75 words = ~7.5s at 150wpm
+        target_segments = max(3, round(total_words / 18.75))  # ~18.75 words = ~7.5s at 150wpm
         words_per_segment = max(12, total_words // target_segments)
         
         segments_text = []
@@ -577,18 +577,7 @@ async def generate_ai_keywords(request: ScriptRequest, user=Depends(get_current_
         if current_chunk:
             segments_text.append(" ".join(current_chunk))
         
-        # Merge if over 12 segments
-        while len(segments_text) > 12 and len(segments_text) >= 2:
-            # Merge the two shortest adjacent segments
-            min_len = float('inf')
-            min_idx = 0
-            for i in range(len(segments_text) - 1):
-                combined = len(segments_text[i].split()) + len(segments_text[i+1].split())
-                if combined < min_len:
-                    min_len = combined
-                    min_idx = i
-            segments_text[min_idx] = segments_text[min_idx] + " " + segments_text[min_idx + 1]
-            segments_text.pop(min_idx + 1)
+        # No segment limit — let the script generate as many scenes as needed
             
         num_segments = len(segments_text)
         logger.info(f"SEGMENTATION: {num_segments} scenes (target was {target_segments}, total words: {total_words})")
