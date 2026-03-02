@@ -219,14 +219,7 @@ export default function AIKeywordsPage() {
 
                                             {/* Right: AI Visual Keywords */}
                                             <div className="p-5 space-y-4 bg-card flex flex-col justify-between">
-                                                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                                                    <div><span className="text-muted-foreground">Subject:</span> <span className="font-medium text-foreground">{segment.keywords.subject}</span></div>
-                                                    <div><span className="text-muted-foreground">Action:</span> <span className="font-medium text-foreground">{segment.keywords.action}</span></div>
-                                                    <div><span className="text-muted-foreground">Setting:</span> <span className="font-medium text-foreground">{segment.keywords.setting}</span></div>
-                                                    <div><span className="text-muted-foreground">Style:</span> <span className="font-medium text-foreground">{segment.keywords.mood_style}</span></div>
-                                                </div>
-
-                                                <div className="pt-3 border-t border-border">
+                                                <div>
                                                     <div className="text-xs font-semibold text-primary mb-1.5 uppercase tracking-wide">Search Query</div>
                                                     <div className="flex items-stretch gap-2">
                                                         <div className="flex-1 bg-secondary/40 px-3 py-2 rounded border border-border text-sm font-mono break-words leading-tight flex items-center">
